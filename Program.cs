@@ -382,7 +382,10 @@ b ourLoop
             List<describe> compressedBuf = new List<describe>();
             IOStream newStream = new IOStream(newFrame.Length / 4);
             newStream.Seek(4);
-            for (ushort i = 0; i < newFrame.Length; i++)
+
+
+
+            for (ushort i = 0; i < newFrame.Length / 4; i++)
             {
                 if (old[i] != newFrame[i])
                 {
@@ -390,6 +393,10 @@ b ourLoop
                     newStream.Write16(i);
                     newStream.Write8(newFrame[i]);
                 }
+
+
+
+
             }
 
             newStream.Seek(0);
@@ -459,8 +466,9 @@ b ourLoop
             assembly.Append(baseAssembly);
             assembly.AppendLine("");
             var files = Directory.GetFiles(OutputFolder);
+            //Convert audio
             var n = files.OrderBy(x => x).ToList().Where(x => x.Contains(".bin")).ToList().OrderBy(x => int.Parse(x.Replace("Output\\tmp", "").Replace(".img.bin", ""))).ToList();//Make sure frame are in right order
-
+            
             assembly.AppendLine("MaxFrames: .word " + n.Count);
             StringBuilder FramesInclude = new StringBuilder();
             StringBuilder FramesIncludeTable = new StringBuilder();
@@ -484,10 +492,18 @@ b ourLoop
                 FramesIncludeTablePointers.AppendLine($".word {thisFrame}");
                 FramesIncludeTablePointers.AppendLine($".align 0x4");
             }
+
+
+
             assembly.Append(FramesIncludeTablePointers);
             assembly.Append(FramesInclude);
             assembly.Append(FramesIncludeTable);
-
+            assembly.AppendLine("//Audio track");
+            assembly.AppendLine("audio: ");
+         
+            var z = files.OrderBy(x => x).ToList().Where(x => x.Contains(".raw")).ToList();//Make sure frame are in right order
+         
+            assembly.AppendLine($".incbin {z.First()}");
             assembly.Append(".close");
             return assembly.ToString();
         }
@@ -497,11 +513,11 @@ b ourLoop
             return "";
         }
 
-        public void RenderAudio(string srcFile)
+        public static void RenderAudio(string srcFile)
         {
             int mffreq = 10512;
             int zmfreq = 13379;
-            int freq = 0;
+            int freq = zmfreq;
             //if (title.ToLower() == "mf")
             //{
                 freq = mffreq;
@@ -559,7 +575,15 @@ b ourLoop
                     }                    //Generate 
                     //Write it
 
-
+                    using(FileStream fs = new FileStream($"{OutputFolder}\\{srcAudio.Name}.raw", FileMode.OpenOrCreate))
+                    using (BinaryWriter bw = new BinaryWriter(fs))
+                    {
+                        for (len = 0; len < raw.Length; len++)
+                        {
+                            bw.Write(data[len]);
+                        }
+                        bw.Close();                        
+                    }
                 }
             }
         }
@@ -693,7 +717,7 @@ b ourLoop
                 }
                 Thread.Sleep(1000);
             }
-          
+            RenderAudio($"{Processing}\\lztown.wav");
             string asm = AssembleVideoRom();
             File.WriteAllText("Output//testplz.asm", asm);
             Console.WriteLine("Finished video");
