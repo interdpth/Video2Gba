@@ -33,437 +33,18 @@ namespace Video2Gba
     {
         private static string Processing = "Processing";
         private static string OutputFolder = "Output";
-        private static readonly StringBuilder baseAssembly = new StringBuilder(@".gba
-.arm
-.open ""test.gba"", 0x8000000
+      
 
-.definelabel DMA0SAD, 0x040000D4
-.definelabel DMA0DAD, 0x040000D8
-.definelabel DMA0CNT_L, 0x040000Dc
-.definelabel REG_DISPLAYCONTROL, 0x04000000
-.definelabel VIDEOMODE_3, 0x0003
-.definelabel BGMODE_2, 0x0400
-.definelabel FrameCounter, 0x02026000
-
-.org 0x8000000
-//Hop to main
-b armMain
-.align 4
-.org 0x80000C0
-armMain:
-ldr r0, = MainFunc + 1
-//hop to thumb main
-bx r0
-interruptHandler:
-LDR     R3, = 0x4000202
-MOVS    R2, #1
-STRH    R2, [R3]
-LDR     R2, = 0x3007FF8
-LDRH    R3, [R2]
-MOVS    R1, #1
-ORRS    R3, R1
-STRH    R3, [R2]
-BX      LR
-.thumb
-
-register_vblank_isr:
-                LDR     R3, = 0x3007FFC
-                LDR     R2, = interruptHandler
-                STR     R2, [R3]
-                LDR     R2, = 0x4000004
-                LDRH    R3, [R2]
-                MOV    R1, #8
-                ORR    R3, R1
-                STRH    R3, [R2]
-                LDR     R2, = 0x4000200
-                LDRH    R3, [R2]
-                MOV    R1, #1
-                ORR    R3, R1
-                STRH    R3, [R2]
-                LDR     R3, = 0x4000208
-                MOV    R2, #1
-                STRH    R2, [R3]
-                BX      LR
-
-
-VBlankIntrWait:
-SWI             5
-BX              LR
-
-// void __fastcall DMA3(int srcAdd, int dstAdd, int size)
-DMA3:
-                LDR     R3, = 0x40000D4
-                STR     R0, [R3]
-                LDR     R3, = 0x40000D8
-                STR     R1, [R3]
-                MOV    R3, #0x80000000
-                ORR    R3, R2
-                LDR     R2, = 0x40000DC
-                STR     R3, [R2]
-
-                nop
-
-                nop
-
-                nop
-                BX      LR
-
-// void __fastcall LZ77UnCompVram(int src, int dst)
-
-LZ77UnCompVram:
-                // src = R0                               
-                // dst = R1                               
-                SWI     0x12
-                BX      LR
-
-
-                //decode, framedata
-decode:
-                add     R3, R0,#4                           
-                LDR     R2, [R3]
-                LDR     R1, = 0x88FFFF00
-                CMP     R2, R1
-                BEQ     rawCopy
-                LDR     R3, = 0x88FFFF01
-                CMP     R2, R3
-                BEQ     lzUncomp
-
-returnDecode:
-
-                BX      LR
-
-rawCopy:
-
-                LDR     R2, [R3,#4]                              
-                ADD    R3, #8
-                LDR     R1, = 0x40000D4
-                STR     R3, [R1]
-
-
-                LDR     R3, = 0x40000D8
-                LDR   R1, =#0x6000000
-                STR     R1, [R3]
-                 LDR   R3,= #0x80000000
-                ORR    R3, R2
-                LDR     R2, = 0x40000DC
-                STR     R3, [R2]
-                B       returnDecode
-
-lzUncomp:
-LDR   R1, =#0x6000000  
-mov r2, 0xC
-add     R0, R0, r2
-                SWI     0x12
-                B       returnDecode
-
-.pool
-.align 4
-MainFunc:
-    //Set up bg
-    ldr r0, =#0x4000000
-	//videomode3|bgmode_2
-	bl register_vblank_isr
-    ldr r1,= #0x403
-    str r1, [r0]
-    ldr r2, =#FrameCounter//FrameCounter offset is in r2
-	mov r0, 0
-    str r0, [r2]
-
-ourLoop:
-bl VBlankIntrWait
-//Clear registers
-mov r0, 0
-mov r1, 0
-mov r2, 0
-mov r3, 0
-
-    CheckMaxFrames:
-    //loop while FrameCounter < MaxFrames
-    LoadFrameCounter:
-
-        ldr r3,= #FrameCounter
-		ldr r2, [r3]
-        LoadMaxFrames:	
-
-        ldr r1, =#MaxFrames
-		ldr r1, [r1]
-        CompareFrameValues:
-
-        cmp r2, r1//if r0 is greater, then we're done
-        bge end
-        //otherwise loop.
-        //increment frame count
-        IncrementFrameCounter:
-
-        add r2, 1
-        str r2, [r3]
-        mov r5, r2
-        //get gfx table
-        IndexFrameTable:	
-
-        ldr r1, =#FrameTable
-		lsl r2, 2
-
-        add r1, r2//r1 is a struct of {offset, size} both words/long		
-
-        ldr r1, [r1]
-
-        mov r2, r1	//mov r1 into r2
-
-    CalcSize:		
-
-        add r2, 4
-        ldr r2, [r2]//r2 contains size offset
-
-    DecodeStuff:
-        ldr r0, [r1]
-        bl decode
-    b ourLoop
-.pool
-end:
-    ldr r2, =#FrameCounter//FrameCounter offset is in r2
-	mov r0, 0
-
-    str r0, [r2]
-b ourLoop
-//pop {r14}
-//bx r0
-.pool
-.align 4
-");
-        private const uint RAWHEADER = 0x88FFFF00;
-        private const uint LZCOMPRESSEDHEADER = 0x88FFFF01;
-        private const uint HUFFMANCOMPRESSEDHEADER = 0x88FFFF02;
-        private const uint DESCRIBEHEADER = 0x88FFFF03;
         public static Semaphore sem = new Semaphore(1, 1);
-        public static IOStream CompLZ77(IOStream input, int length)
-        {
-            IOStream output = new IOStream(4);
-            byte[] data;
-            data = input.Data;
-            Dictionary<int, List<int>> dictionary;
-            dictionary = new Dictionary<int, List<int>>();
-            for (int i = 0; i < input.Length - 2; i++)
-            {
-                int key;
-                key = (data[i] | (data[i + 1] << 8) | (data[i + 2] << 16));
-                List<int> value;
-                if (dictionary.TryGetValue(key, out value))
-                {
-                    value.Add(i);
-                }
-                else
-                {
-                    dictionary.Add(key, new List<int>
-                    {
-                        i
-                    });
-                }
-            }
-            int num;
-            num = 18;
-            int num2;
-            num2 = 4096;
-            int num3;
-            num3 = 0;
-            int position;
-            position = output.Position;
-            output.Write8(16);
-            output.Write8((byte)length);
-            output.Write8((byte)(length >> 8));
-            output.Write8((byte)(length >> 16));
-            while (num3 < length)
-            {
-                int position2;
-                position2 = output.Position;
-                output.Write8(0);
-                for (int num4 = 0; num4 < 8; num4++)
-                {
-                    if (num3 + 3 <= length)
-                    {
-                        int key2;
-                        key2 = (data[num3] | (data[num3 + 1] << 8) | (data[num3 + 2] << 16));
-                        List<int> value2;
-                        if (dictionary.TryGetValue(key2, out value2))
-                        {
-                            int j;
-                            j = 0;
-                            while (value2[j] < num3 - num2)
-                            {
-                                j++;
-                                if (j != value2.Count)
-                                {
-                                    continue;
-                                }
-                                goto IL_01cf;
-                            }
-                            int num5;
-                            num5 = -1;
-                            int num6;
-                            num6 = -1;
-                            for (; j < value2.Count; j++)
-                            {
-                                int num7;
-                                num7 = value2[j];
-                                if (num7 >= num3 - 1)
-                                {
-                                    break;
-                                }
-                                int k;
-                                for (k = 3; num3 + k < length && data[num7 + k] == data[num3 + k] && k < num; k++)
-                                {
-                                }
-                                if (k > num5)
-                                {
-                                    num5 = k;
-                                    num6 = num7;
-                                }
-                            }
-                            if (num6 != -1)
-                            {
-                                int num8;
-                                num8 = num3 - num6 - 1;
-                                output.Write8((byte)((num5 - 3 << 4) | (num8 >> 8)));
-                                output.Write8((byte)num8);
-                                output.Data[position2] |= (byte)(128 >> num4);
-                                num3 += num5;
-                                goto IL_01de;
-                            }
-                        }
-                    }
-                    goto IL_01cf;
-                    IL_01cf:
-                    output.Write8(data[num3++]);
-                    goto IL_01de;
-                    IL_01de:
-                    if (num3 >= length)
-                    {
-                        break;
-                    }
-                }
-            }
-            return output;
-        }
-
+       
 
         List<Frame> frames;
-        private static byte[] RawFrame(byte[] frame)
-        {
-            byte[] buffer = new byte[frame.Length + 8];
-
-            BitConverter.GetBytes(0x88FFFF00).CopyTo(buffer, 0);
-            BitConverter.GetBytes(frame.Length).CopyTo(buffer, 4);
-            frame.CopyTo(buffer, 8);
-
-            return buffer;
-        }
-
-        private static byte[] LzCompress(byte[] frame)
-        {
-            IOStream src = new IOStream(frame);
-            IOStream output = CompLZ77(src, frame.Length);
-
-            byte[] returnvalue = new byte[8 + output.Length];
-            BitConverter.GetBytes(LZCOMPRESSEDHEADER).CopyTo(returnvalue, 0);
-            BitConverter.GetBytes(frame.Length).CopyTo(returnvalue, 4);
-            output.CopyToArray(0, returnvalue, 8, output.Length);
-
-            return returnvalue;
-        }
-
-        private static byte[] HuffmanCompress(byte[] frame)
-        {
-            return new byte[1];
-        }
-
-        private static byte[] DescribeCompress(byte[] old, byte[] newFrame)
-        {
-            //
-            List<describe> compressedBuf = new List<describe>();
-            IOStream newStream = new IOStream(newFrame.Length / 4);
-            newStream.Seek(4);
-
-
-
-            for (ushort i = 0; i < newFrame.Length / 4; i++)
-            {
-                if (old[i] != newFrame[i])
-                {
-                    compressedBuf.Add(new describe(i, newFrame[i]));
-                    newStream.Write16(i);
-                    newStream.Write8(newFrame[i]);
-                }
-
-
-
-
-            }
-
-            newStream.Seek(0);
-            newStream.Write32(compressedBuf.Count - 4);
-            byte[] returnvalue = new byte[4 + newStream.Length];
-            BitConverter.GetBytes(DESCRIBEHEADER).CopyTo(returnvalue, 0);
-            newStream.CopyToArray(0, returnvalue, 8, returnvalue.Length);
-
-            return returnvalue;
-
-        }
-
-        private static byte[] oldFrame;
-
-        private static void Compress(byte[] buffer, string fn)
-        {
-            Console.WriteLine("Compressing to " + fn);
-            byte[] bestData = RawFrame(buffer);
-
-            //See who has best data. 
-            int bestSize = buffer.Length;//raw 
-
-            byte[] lz = LzCompress(buffer);
-            //    byte[] huff = HuffmanCompress(buffer);
-
-
-            byte[] describe = null;
-
-
-            if (lz.Length < bestSize)
-            {
-                bestSize = lz.Length;
-                bestData = lz;
-            }
-
-            //if (huff.Length > bestSize)
-            //{
-            //    bestSize = huff.Length;
-            //    bestData = huff;
-            //}
-            //if (oldFrame != null && oldFrame.Length > 0)
-            //{
-            //    DescribeCompress(oldFrame, buffer);
-            //    if (describe.Length > bestSize)
-            //    {
-            //        bestSize = describe.Length;
-            //        bestData = describe;
-            //    }
-            //}
-
-            byte[] file = new byte[bestSize + 4];
-
-
-            BitConverter.GetBytes(bestSize).CopyTo(file, 0);
-            bestData.CopyTo(file, 4);
-
-            File.WriteAllBytes(fn, file);
-
-
-            //We need to keep the last frame in memory.
-            oldFrame = buffer;
-        }
+        
 
         public static string AssembleVideoRom()
         {
             StringBuilder assembly = new StringBuilder();
-            assembly.Append(baseAssembly);
+            assembly.Append(ROM.baseAssembly);
             assembly.AppendLine("");
             var files = Directory.GetFiles(OutputFolder);
             //Convert audio
@@ -591,7 +172,21 @@ b ourLoop
 
         static void Main(string[] args)
         {
+            int ticks_per_sample = 16777216 / 10512;
 
+            for (int i= 0; i<10;i++)
+            {
+                //sample = 10512;
+                int norm = (int)(i * ticks_per_sample * (1.0 / 280806)); ;
+                int nonorm =(int) (i * ticks_per_sample * 1.0) / 280806; 
+
+                if(norm!=nonorm)
+                {
+                    Console.Write("lol");
+                }
+            }
+            var b = ((1.0) / 280806);
+            var b2 = Convert.ToUInt32(b);
             Console.WriteLine("Decoding video");
             // get wav
             //./ffmpeg -i lztown.mp4 .\lztown.wav
@@ -623,7 +218,7 @@ b ourLoop
 
 
             //Re-encode.
-            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i lztown.mp4 -filter:v fps=fps=10 {Processing}\\lztown.mp4" };
+            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i lztown.mp4 -filter:v fps=fps=1 {Processing}\\lztown.mp4" };
             var P = Process.Start(PSI);
             P.WaitForExit();
 
@@ -661,11 +256,10 @@ b ourLoop
                  {
                      try
                      {
-
                          byte[] data = File.ReadAllBytes(rawName + ".img.bin");
 
                          //insert gfx                    
-                         Compress(data, OutputFolder + "//" + rawName + ".img.bin");
+                         VideoCompression.Compress(data, OutputFolder + "//" + rawName + ".img.bin");
 
                          File.Delete(rawName + ".img.bin");
                          Thread.Sleep(100);
