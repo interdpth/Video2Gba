@@ -8,6 +8,11 @@ namespace Video2Gba
 {
     public class ROM
     {
+
+       
+
+
+        //I miss it already
         public static readonly StringBuilder baseAssembly = new StringBuilder(@".gba
 .arm
 .open ""test.gba"", 0x8000000

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DSDecmp.Formats.Nitro;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -60,10 +61,6 @@ namespace Video2Gba
                     newStream.Write16(i);
                     newStream.Write8(newFrame[i]);
                 }
-
-
-
-
             }
 
             newStream.Seek(0);
@@ -75,21 +72,62 @@ namespace Video2Gba
             return returnvalue;
 
         }
-
+    
         private static byte[] oldFrame;
 
-        public static void Compress(byte[] buffer, string fn)
+        public static void CompressFile(byte[] buffer, string fn, int enableCircleComp=3)
         {
             Console.WriteLine("Compressing to " + fn);
+           
+            File.WriteAllBytes(fn, Compress(buffer));
+        }
+
+        private void LutComp(byte[] buffer)
+        {
+
+            //We index all possible values 
+
+        }
+        public static byte[] Compress(byte[] buffer, int enableCircleComp = 3)
+        {
+
             byte[] bestData = RawFrame(buffer);
 
             //See who has best data. 
             int bestSize = buffer.Length;//raw 
 
             byte[] lz = LzCompress(buffer);
-            //    byte[] huff = HuffmanCompress(buffer);
+            byte[] huff = new byte[1];
 
+            //using (MemoryStream m = new MemoryStream(buffer))
+            //{
+            //    byte[] tmp = new byte[20000000];
 
+            //    using (MemoryStream m2 = new MemoryStream(tmp))
+            //    {
+            //        Huffman4 h = new Huffman4();
+
+            //     int size=   h.Compress(m, buffer.Length, m2);
+            //        huff = new byte[size];
+            //        Array.Copy(tmp, huff,  size);
+            //} }
+
+            //using (MemoryStream m = new MemoryStream(buffer))
+            //{
+            //    byte[] tmp = new byte[20000000];
+
+            //    using (MemoryStream m2 = new MemoryStream(tmp))
+            //    {
+            //        RLE h = new RLE();
+
+            //        int size = h.Compress(m, buffer.Length, m2);
+            //        huff = new byte[size];
+            //        Array.Copy(tmp, huff, size);
+            //    }
+            //}
+
+            //new Huffman().Compress("tests/huff/dec/00.ffuh.dat", "tests/huff/cmp/00.huff4");
+         //   byte[] circle = CircleComp(buffer, enableCircleComp);
             byte[] describe = null;
 
 
@@ -98,6 +136,19 @@ namespace Video2Gba
                 bestSize = lz.Length;
                 bestData = lz;
             }
+
+
+            //if (huff.Length < bestSize)
+            //{
+            //    bestSize = huff.Length;
+            //    bestData = huff;
+            //}
+
+            //if (circle.Length < bestSize)
+            //{
+            //    bestSize = circle.Length;
+            //    bestData = huff;
+            //}
 
             //if (huff.Length > bestSize)
             //{
@@ -118,13 +169,13 @@ namespace Video2Gba
 
 
             BitConverter.GetBytes(bestSize).CopyTo(file, 0);
+
+
             bestData.CopyTo(file, 4);
 
-            File.WriteAllBytes(fn, file);
+            return file;
 
-
-            //We need to keep the last frame in memory.
-            oldFrame = buffer;
+        
         }
 
         public static IOStream CompLZ77(IOStream input, int length)
@@ -236,16 +287,49 @@ namespace Video2Gba
             return output;
         }
 
-        public static void CircleComp(byte[] buffer)
+        
+        public static byte[] CircleComp(byte[] buffer, int enableCircleComp)
         {
-            if(buffer.Length>200)
+            if(buffer.Length<200 || enableCircleComp==0)
             {
-                return;
+                return buffer;
             }
-
+            
             //Split the arrays up.
 
             List<byte[]> buffers = new List<byte[]>();
+
+            int len = buffer.Length / 4;
+
+            for (int i =0;i< buffer.Length; i++)
+            {
+                int realSize = i + len < buffer.Length ? len : buffer.Length - i;
+                byte[] newBuffer = new byte[realSize];
+                Array.Copy(buffer, i, newBuffer, 0, realSize);
+                buffers.Add(Compress(newBuffer, enableCircleComp-1));
+                i += realSize;
+            }
+            List<byte> fulbuf = new List<byte>();
+            foreach(var b in buffers)
+            {
+                fulbuf.AddRange(b.ToList()) ;
+            }
+            //no
+            return fulbuf.ToArray(); ;
+            //on arrays after 4, use lz compression other wise we 
+
+
+            // 01 32 EF 56
+            // FF 00 BE
+            // 02 AA CD 
+            // 00 CD 00
+
+            //Illegal size is > 243
+
+
+
+
+
 
 
         }
