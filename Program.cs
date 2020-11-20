@@ -1,4 +1,5 @@
-﻿using NAudio.Mixer;
+﻿using Microsoft.WindowsAPICodePack.Shell;
+using NAudio.Mixer;
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
@@ -11,13 +12,6 @@ using System.Threading.Tasks;
 
 namespace Video2Gba
 {
-    public class Frame
-    {
-        int dataCount;
-        byte[] data;
-    };
-
-
 
     public class describe
     {
@@ -35,50 +29,32 @@ namespace Video2Gba
         private static string Processing = "Processing";
         private static string OutputFolder = "Output";
 
-
+        private static List<string> fileInfos = new List<string>();
         public static Semaphore sem = new Semaphore(1, 1);
 
-       
+        public static Semaphore sem2 = new Semaphore(1, 1);
+        public static List<string> FramesInclude = new List<string>();
+        public static StringBuilder FramesTable = new StringBuilder("VidFrame theframes[]={");
         //I miss this.
         public static string AssembleVideoCCode()
-        { 
-        StringBuilder assembly = new StringBuilder();
-            assembly.AppendLine("");
+        {
+            StringBuilder assembly = new StringBuilder();
+
             var files = Directory.GetFiles(OutputFolder);
             //Convert audio
-            var n = files.OrderBy(x => x).ToList().Where(x => x.Contains(".frame")).ToList();
-            n= n.OrderBy(x => int.Parse(x.Replace("Output\\tmp", "").Replace(".frame", ""))).ToList();//Make sure frame are in right order
+       
 
-            StringBuilder FramesInclude = new StringBuilder();
-            StringBuilder FramesTable = new StringBuilder("VidFrame theframes[]={");
+          
+            Program.FramesTable.AppendLine("};");
 
-            foreach (var video in n)
-            {
-                //Re-encode.
-                var PSI = new ProcessStartInfo { FileName = "raw2c", WindowStyle= ProcessWindowStyle.Hidden ,UseShellExecute = true, CreateNoWindow = true, Arguments = $"{video}" };
-                var P = Process.Start(PSI);
-                P.WaitForExit();
-                FileInfo curFile = new FileInfo(video);
-                string r = curFile.Name.Replace(".frame", "");
-                FramesInclude.AppendLine($"#include \"{r}.h\"");
-                FramesTable.AppendLine("{"+r+","+curFile.Length+"},");
-                curFile.Delete();//delete the framew file.     
-
-                File.Copy(r + ".h", "Output\\" + r + ".h");
-                File.Copy(r + ".c", "Output\\" + r + ".c");
-                File.Delete(r + ".c");
-                File.Delete(r + ".h");
-            }
-            FramesTable.AppendLine("};");
-        
             assembly.AppendLine(FramesInclude.ToString());
             assembly.AppendLine("//Frames don't have a type.");
-            assembly.AppendLine("struct VidFrame");
+            assembly.AppendLine("typedef struct");
             assembly.AppendLine("{");
             assembly.AppendLine("    unsigned long* fra;");
             assembly.AppendLine("    unsigned long size");
-            assembly.AppendLine("};");
-            assembly.AppendLine($"#define FrameCount {n.Count}");
+            assembly.AppendLine("} VidFrame;");
+            assembly.AppendLine($"const int FrameCount = {FramesInclude.Count};");
             assembly.AppendLine(FramesTable.ToString());
 
             return assembly.ToString();
@@ -87,58 +63,7 @@ namespace Video2Gba
 
 
 
-        //I miss this.
-        public static string AssembleVideoRom()
-        {
-            StringBuilder assembly = new StringBuilder();
-            assembly.Append(ROM.baseAssembly);
-            assembly.AppendLine("");
-            var files = Directory.GetFiles(OutputFolder);
-            //Convert audio
-            var n = files.OrderBy(x => x).ToList().Where(x => x.Contains(".frame")).ToList().OrderBy(x => int.Parse(x.Replace("Output\\tmp", "").Replace(".frame", ""))).ToList();//Make sure frame are in right order
-
-            assembly.AppendLine("MaxFrames: .word " + n.Count);
-            StringBuilder FramesInclude = new StringBuilder();
-            StringBuilder FramesIncludeTable = new StringBuilder();
-            StringBuilder FramesIncludeTablePointers = new StringBuilder();
-            FramesIncludeTablePointers.AppendLine("FrameTable:");
-            foreach (string file in n)
-            {
-
-                FileInfo nf = new FileInfo(file);
-                string thisFrame = nf.Name.Replace(".frame", "");
-
-                FramesInclude.AppendLine($"{thisFrame}gfx:");
-                FramesInclude.AppendLine($"\t.incbin \"{nf.FullName}\"");
-                FramesInclude.AppendLine($".align 0x4");
-                //Insert pointer to Gfx and size
-                FramesIncludeTable.AppendLine($"\n{thisFrame}:");
-                //{
-                FramesIncludeTable.AppendLine($".word {thisFrame}gfx");
-                FramesIncludeTable.AppendLine($".word 0x{nf.Length.ToString("X")}");
-                //}
-                FramesIncludeTable.AppendLine($".align 0x4");
-                //Make table 
-                FramesIncludeTablePointers.AppendLine($".word {thisFrame}");
-                { }
-                FramesIncludeTablePointers.AppendLine($".align 0x4");
-            }
-
-
-
-            assembly.Append(FramesIncludeTablePointers);
-            assembly.Append(FramesInclude);
-            assembly.Append(FramesIncludeTable);
-            assembly.AppendLine("//Audio track");
-            assembly.AppendLine("audio: ");
-
-            var z = files.OrderBy(x => x).ToList().Where(x => x.Contains(".raw")).ToList();//Make sure frame are in right order
-
-            assembly.AppendLine($".incbin {z.First()}");
-            assembly.Append(".close");
-            return assembly.ToString();
-        }
-
+   
         public string SetupIncludes()
         {
             return "";
@@ -149,20 +74,9 @@ namespace Video2Gba
             int mffreq = 10512;
             int zmfreq = 13379;
             int freq = zmfreq;
-            //if (title.ToLower() == "mf")
-            //{
+          
             freq = mffreq;
-            //}
-            //else if (title.ToLower() == "zm")
-            //{
-            //    freq = zmfreq;
-            //}
-            //else
-            //{
-            //    Console.WriteLine("Not Fusion or ZM, using freq " + title);
-            //    freq = int.Parse(title);
-            //}
-
+      
             FileInfo srcAudio = new FileInfo(srcFile);
 
             //we need to be 8bit and mono channel, apply desired frequency.
@@ -205,8 +119,8 @@ namespace Video2Gba
 
                     }                    //Generate 
                     //Write it
-
-                    using (FileStream fs = new FileStream($"{OutputFolder}\\{srcAudio.Name}.raw", FileMode.OpenOrCreate))
+                    string fn = srcAudio.Name.Replace(".wav", "");
+                    using (FileStream fs = new FileStream($"{fn}.raw", FileMode.OpenOrCreate))
                     using (BinaryWriter bw = new BinaryWriter(fs))
                     {
                         for (len = 0; len < raw.Length; len++)
@@ -215,6 +129,10 @@ namespace Video2Gba
                         }
                         bw.Close();
                     }
+
+
+
+                    ROM.MakeSource(fn, data.ToArray(), "Output");               
                 }
             }
         }
@@ -255,15 +173,17 @@ namespace Video2Gba
                     File.Delete(s);
                 }
             }
-
-
+          
+           uint fr=  (ShellFile.FromFilePath("lztown.mp4").Properties.System.Video.FrameRate.Value==null?0: ShellFile.FromFilePath("lztown.mp4").Properties.System.Video.FrameRate.Value.Value) / 1000;
+            int targetFps = 11;
             //Re-encode.
-            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i lztown.mp4 -filter:v fps=fps=11 {Processing}\\lztown.mp4" };
+            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i lztown.mp4 -filter:v fps=fps={targetFps} {Processing}\\lztown.mp4" };
             var P = Process.Start(PSI);
             P.WaitForExit();
 
+            float fps = (float)((float)fr / (float)targetFps);
 
-            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\lztown.mp4 {Processing}\\lztown.wav" };
+            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\lztown.mp4 -af atempo={fps} {Processing}\\lztown.wav" };
             P = Process.Start(PSI);
             P.WaitForExit();
 
@@ -297,14 +217,13 @@ namespace Video2Gba
                      try
                      {
                          byte[] data = File.ReadAllBytes(rawName + ".img.bin");
-
-                         //insert gfx                    
-                         VideoCompression.CompressFile(data, OutputFolder + "//" + rawName + ".frame");
+                         Program.FramesInclude.Add($"#include \"{rawName}.h\"");
+                         Program.FramesTable.AppendLine("{" + rawName + "," + data.Length + "},");
 
                          File.Delete(rawName + ".img.bin");
-                         Thread.Sleep(100);
-                         File.Delete(hey);
-                         Thread.Sleep(100);
+                         //insert gfx                    
+                         VideoCompression.CompressFile2(data, rawName, OutputFolder);                         
+                                             
                      }
                      catch (Exception e)
                      {
@@ -327,7 +246,7 @@ namespace Video2Gba
 
                 //Wait until free
 
-                while (conversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 100) ;
+                while (conversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 80) ;
                 t.IsBackground = true;
                 t.Start();
                 conversions.Add(t);

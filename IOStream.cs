@@ -316,9 +316,23 @@ namespace Video2Gba
             Buffer.BlockCopy(data, srcOffset, dstData, dstOffset, len);
         }
 
+
+
         public void CopyFromArray(Array srcData, int srcOffset, int dstOffset, int len)
         {
+          
             Buffer.BlockCopy(srcData, srcOffset, data, dstOffset, len);
+        }
+
+
+        public void CopyFromArray(Array srcData, int len)
+        {
+            if (pos + len > data.Length)
+            {
+                Capacity = pos + len;
+            }
+            Buffer.BlockCopy(srcData, 0, data, pos, len);
+        
         }
 
         public void OverlappingCopy(int amount, int window)
