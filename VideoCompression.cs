@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Video2Gba.LibIpsNet;
 
 namespace Video2Gba
 {
@@ -16,7 +17,9 @@ namespace Video2Gba
         private const uint LZCOMPRESSEDHEADER = 0x88FFFF01;
         private const uint HUFFMANCOMPRESSEDHEADER = 0x88FFFF02;
         private const uint DESCRIBEHEADER = 0x88FFFF03;
-        private const uint LUTHEADER = 0x88FFFF03;
+        private const uint LUTHEADER = 0x88FFFF02;
+        private const uint DIFFHEADER = 0x88FFFF12;
+        private const uint LZDIFFHEADER = 0x88FFFF12;
         private static byte[] RawFrame(byte[] frame)
         {
             byte[] buffer = new byte[frame.Length + 8];
@@ -36,7 +39,7 @@ namespace Video2Gba
             byte[] returnvalue = new byte[8 + output.Length];
             BitConverter.GetBytes(LZCOMPRESSEDHEADER).CopyTo(returnvalue, 0);
             BitConverter.GetBytes(frame.Length).CopyTo(returnvalue, 4);
-            output.CopyToArray(0, returnvalue, 8, output.Length);
+            output.CopyToArray(0, returnvalue, 8, (int)output.Length);
 
             return returnvalue;
         }
@@ -91,8 +94,8 @@ namespace Video2Gba
 
         }
 
-        private static byte[] oldFrame;
-        public static byte[] Compress(byte[] buffer, int enableCircleComp = 3)
+        private static byte[] oldFrame = null;
+        public static byte[] Compress(ref byte[] buffer, int enableCircleComp = 3)
         {
 
             byte[] bestData = RawFrame(buffer);
@@ -101,6 +104,8 @@ namespace Video2Gba
             int bestSize = buffer.Length;//raw 
 
             byte[] lz = LzCompress(buffer);
+            byte[] diff = FrameCompareComp(buffer);
+            byte[] difflz = LzCompress(diff);
             byte[] huff = new byte[1];
             //byte[] dic = LutComp(buffer, enableCircleComp);
             //using (MemoryStream m = new MemoryStream(buffer))
@@ -134,13 +139,17 @@ namespace Video2Gba
             //   byte[] circle = CircleComp(buffer, enableCircleComp);
             byte[] describe = null;
 
-
             if (lz.Length < bestSize)
             {
                 bestSize = lz.Length;
                 bestData = lz;
             }
 
+            if (diff.Length < bestSize)
+            {
+                bestSize = diff.Length;
+                bestData = diff;
+            }
 
             //if (huff.Length < bestSize)
             //{
@@ -182,11 +191,16 @@ namespace Video2Gba
 
         }
 
-        public static void CompressFile2(byte[] buffer, string fn, string output, int enableCircleComp = 3)
+        public static void CompressFile2(ref byte[] buffer, string fn, string output, int enableCircleComp = 3)
         {
             Console.WriteLine("Compressing to " + fn);
 
-            ROM.MakeSource(fn, Compress((byte[])buffer), output);
+            ROM.MakeSource(fn, Compress(ref buffer), output);
+
+            VideoCompression.oldFrame = buffer;
+
+
+
         }
 
 
@@ -194,12 +208,13 @@ namespace Video2Gba
         {
             Console.WriteLine("Compressing to " + fn);
 
-            File.WriteAllBytes(fn, Compress(buffer));
+            File.WriteAllBytes(fn, Compress(ref buffer));
+            VideoCompression.oldFrame = buffer;
         }
 
-        private static byte[] LutComp(byte[] buffer, int enableCircleComp= 3)
+        private static byte[] LutComp(byte[] buffer, int enableCircleComp = 3)
         {
-           
+
             //We index all possible values 
             List<UInt32> valueTable = new List<uint>();
             List<UInt32> tmpBuff = new List<UInt32>();
@@ -208,7 +223,7 @@ namespace Video2Gba
 
 
             int padding = 0;
-            
+
 
             while ((buffer.Length + padding) % 4 != 0) { padding++; }
 
@@ -216,7 +231,7 @@ namespace Video2Gba
             int blockLen = len / 4;//realsize
             tmpBuff = new List<UInt32>(blockLen);
 
-           
+
             List<List<UInt32>> buffers = new List<List<uint>> { new List<uint>(len), new List<uint>(len), new List<uint>(len), new List<uint>(len) };
 
             for (int i = 0; i < 4; i++)
@@ -226,22 +241,22 @@ namespace Video2Gba
 
 
             List<List<ushort>> replaceBuffers = new List<List<ushort>>(4);
-            
+
             List<Thread> compressionThreads = new List<Thread>();
             for (int i = 0; i < 4; i++)
             {
-                for(int x = 0; x<buffers[i].Count;i++)
+                for (int x = 0; x < buffers[i].Count; i++)
                 {
                     uint tvalue = buffers[i][x];
-                     //Is value in the dict? 
-                     if (!valueTable.Contains(tvalue))
-                     {
+                    //Is value in the dict? 
+                    if (!valueTable.Contains(tvalue))
+                    {
                         valueTable.Add(tvalue);
-                     }
+                    }
 
-                    ushort newIndex = (ushort)valueTable.FindIndex(z=>z==tvalue);
+                    ushort newIndex = (ushort)valueTable.FindIndex(z => z == tvalue);
                     replaceBuffers[i].Add(newIndex);
-                }       
+                }
             }
 
 
@@ -253,12 +268,12 @@ namespace Video2Gba
                 Thread t = new Thread(() =>
                 {
                     int index = i;
-                 
+
                     byte[] tmpBytes = new byte[replaceBuffers[index].Count * 2];
                     Buffer.BlockCopy(replaceBuffers[index].ToArray(), 0, tmpBytes, 0, tmpBytes.Length);
 
-                    byte[] CompBuff = Compress(tmpBytes, enableCircleComp--);
-
+                    byte[] CompBuff = Compress(ref tmpBytes, enableCircleComp--);
+                    tmpBytes = null;
                     listLock.WaitOne();
                     compressedBuffers[index] = CompBuff.ToList();
                     listLock.Release();
@@ -272,8 +287,8 @@ namespace Video2Gba
 
             List<int> sizes = new List<int> { compressedBuffers[0].Count, compressedBuffers[1].Count, compressedBuffers[2].Count, compressedBuffers[3].Count };
             newStream.Seek(0);
-            
-           
+
+
             newStream.Write32(padding);//Padding
             for (int i = 0; i < 4; i++) newStream.Write32(sizes[i]);
             newStream.Write32(valueTable.Count * 4);
@@ -287,7 +302,7 @@ namespace Video2Gba
             BitConverter.GetBytes(LUTHEADER).CopyTo(returnvalue, 0);
             BitConverter.GetBytes(8 + newStream.Length).CopyTo(returnvalue, 4);
 
-            newStream.CopyToArray(0, returnvalue, 8, newStream.Length);
+            newStream.CopyToArray(0, returnvalue, 8, (int)newStream.Length);
             //We want to trim padding before actual compression. 
             //Convert to Int32 
 
@@ -325,7 +340,7 @@ namespace Video2Gba
             int num3;
             num3 = 0;
             int position;
-            position = output.Position;
+            position = (int)output.Position;
             output.Write8(16);
             output.Write8((byte)length);
             output.Write8((byte)(length >> 8));
@@ -333,7 +348,7 @@ namespace Video2Gba
             while (num3 < length)
             {
                 int position2;
-                position2 = output.Position;
+                position2 = (int)output.Position;
                 output.Write8(0);
                 for (int num4 = 0; num4 < 8; num4++)
                 {
@@ -390,10 +405,10 @@ namespace Video2Gba
                         }
                     }
                     goto IL_01cf;
-                IL_01cf:
+                    IL_01cf:
                     output.Write8(data[num3++]);
                     goto IL_01de;
-                IL_01de:
+                    IL_01de:
                     if (num3 >= length)
                     {
                         break;
@@ -401,6 +416,158 @@ namespace Video2Gba
                 }
             }
             return output;
+        }
+
+        //IPS format used.
+        enum types { COMPRESSED, DECOMPRESSED };
+        public static byte[] GetDifferences(byte[] oldbuffer, byte[] newbuffer)
+        {
+
+
+            for (int i = 0; i < newbuffer.Length;)
+            {
+                //what do we have heare?
+                if (oldbuffer[i] == newbuffer[i])
+                {
+
+                }
+                i++;
+            }
+
+            return new byte[] { 0 };
+
+        }
+        //Break frame into 4 sections
+        //Run IPS on the frames//ips needs to use gba rl 
+        //Run lz after rejoining.
+
+        public static byte[] FrameCompareComp(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            List<byte[]> newBuffers = new List<byte[]>();
+
+            int len = buffer.Length / 4;
+
+            for (int i = 0; i < buffer.Length;)
+            {
+
+                byte[] newBuffer = new byte[len];
+                Array.Copy(buffer, i, newBuffer, 0, len);
+                newBuffers.Add(newBuffer);
+                i += len;
+            }
+
+
+            List<byte[]> old = new List<byte[]>();
+
+            len = oldFrame.Length / 4;
+
+            for (int i = 0; i < oldFrame.Length;)
+            {
+
+                byte[] newBuffer = new byte[len];
+                Array.Copy(oldFrame, i, newBuffer, 0, len);
+                old.Add(newBuffer);
+                i += len;
+            }
+
+            List<byte[]> compressedDifferences = new List<byte[]>();
+            int quadlen = 0;
+            Creator c = new Creator();
+            for (int i = 0; i < 4; i++)
+            {
+                using (var olds = new MemoryStream(old[i]))
+                {
+                    using (var newf = new MemoryStream(newBuffers[i]))
+                    {
+                        var str = c.Create(olds, newf);
+                        compressedDifferences.Add(str);
+                        quadlen += (int)str.Length;
+                    }
+                }
+            }                                  
+
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(DIFFHEADER);
+            src.WriteU32((uint)quadlen);
+            foreach (var s in compressedDifferences) src.WriteU32((uint)s.Length);
+            foreach (var s in compressedDifferences) src.CopyFromArray(s, s.Length);
+
+            returnValue = src.Data;
+
+            return returnValue;
+        }
+
+
+
+        public static byte[] Create3(byte[] source, byte[] target)
+        {
+            long sourcelen = source.Length;
+            long targetlen = target.Length;
+
+            bool sixteenmegabytes = false;
+
+            if (sourcelen > 16777216)
+            {
+                sourcelen = 16777216;
+                sixteenmegabytes = true;
+            }
+            if (targetlen > 16777216)
+            {
+                targetlen = 16777216;
+                sixteenmegabytes = true;
+            }
+
+
+
+            IOStream rawBinData = new IOStream(5);
+            Dictionary<UInt32, List<byte>> dics = new Dictionary<UInt32, List<byte>>();//Containing the differences at end.
+            for (uint srcCount = 0; srcCount < source.Length; srcCount++)
+            {
+                UInt32 curOffset = 0;
+                List<byte> differences = new List<byte>();
+                if (source[srcCount] != target[srcCount])
+                {
+                    curOffset = srcCount;
+                    while (srcCount != source.Length && source[srcCount] != target[srcCount])
+                    {
+                        differences.Add(target[srcCount++]);
+                    }
+
+                    dics.Add(curOffset, differences);
+                }
+                
+            }
+
+
+            //We store offsets then data because it'll make the LZ compression better.
+            foreach (var entry in dics.Keys)
+            {
+                rawBinData.Write32((int)entry);
+            }
+
+            foreach (var entry in dics.Values)
+            {
+                foreach (var d in entry)
+                {
+                    rawBinData.Write16(d);
+                }
+            }
+
+
+            return rawBinData.Data;
         }
 
 
@@ -422,7 +589,7 @@ namespace Video2Gba
                 int realSize = i + len < buffer.Length ? len : buffer.Length - i;
                 byte[] newBuffer = new byte[realSize];
                 Array.Copy(buffer, i, newBuffer, 0, realSize);
-                buffers.Add(Compress(newBuffer, enableCircleComp - 1));
+                buffers.Add(Compress(ref newBuffer, enableCircleComp - 1));
                 i += realSize;
             }
             List<byte> fulbuf = new List<byte>();

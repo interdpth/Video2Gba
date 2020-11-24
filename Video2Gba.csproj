@@ -54,6 +54,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IOStream.cs" />
+    <Compile Include="Libips.Net\Creator.cs" />
+    <Compile Include="Libips.Net\Exceptions\Ips16MegabytesException.cs" />
+    <Compile Include="Libips.Net\Exceptions\IpsIdenticalException.cs" />
+    <Compile Include="Libips.Net\Exceptions\IpsInvalidException.cs" />
+    <Compile Include="Libips.Net\Exceptions\IpsNotThisException.cs" />
+    <Compile Include="Libips.Net\Exceptions\IpsScrambledException.cs" />
+    <Compile Include="Libips.Net\Utils\Reader.cs" />
+    <Compile Include="Libips.Net\Utils\Writer.cs" />
     <Compile Include="Old.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -65,6 +73,10 @@
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="PlayBoyScout.c" />
+  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
