@@ -15,11 +15,15 @@ namespace Video2Gba
 
         private const uint RAWHEADER = 0x88FFFF00;
         private const uint LZCOMPRESSEDHEADER = 0x88FFFF01;
-        private const uint HUFFMANCOMPRESSEDHEADER = 0x88FFFF02;
+        private const uint INTERLACERLEHEADER = 0x88FFFF22;
+        private const uint INTERLACERLEHEADER2 = 0x88FFFF23;
         private const uint DESCRIBEHEADER = 0x88FFFF03;
         private const uint LUTHEADER = 0x88FFFF02;
         private const uint DIFFHEADER = 0x88FFFF12;
-        private const uint LZDIFFHEADER = 0x88FFFF12;
+        private const uint QUADDIFFHEADER = 0x88FFFF13;
+        private const uint QUADDIFFHEADER2 = 0x88FFFF14;
+        private const uint RLEHEADER = 0x88FFFF15;
+
         private static byte[] RawFrame(byte[] frame)
         {
             byte[] buffer = new byte[frame.Length + 8];
@@ -49,6 +53,8 @@ namespace Video2Gba
             return new byte[1];
         }
 
+        //byte count is how much u8, u16, 3, u32
+ 
         private static byte[] DescribeCompress(byte[] old, byte[] newFrame)
         {
             //
@@ -93,6 +99,161 @@ namespace Video2Gba
             return returnvalue;
 
         }
+        public static byte[] CompRLE(byte[] input)
+        {
+            IOStream output = new IOStream();
+            int position;
+            position = (int)output.Position;
+            byte[] data;
+            int length = input.Length;
+            data = input;
+            for (int i = 0; i < 2; i++)
+            {
+                List<byte> list;
+                list = new List<byte>();
+                List<int> list2;
+                list2 = new List<int>();
+                byte b;
+                b = data[i];
+                list.Add(b);
+                int num;
+                num = 1;
+                for (int j = i + 2; j < length; j += 2)
+                {
+                    byte b2;
+                    b2 = data[j];
+                    if (b2 == b)
+                    {
+                        num++;
+                        continue;
+                    }
+                    list.Add(b2);
+                    list2.Add(num);
+                    b = b2;
+                    num = 1;
+                }
+                list2.Add(num);
+                byte[,] array;
+                array = new byte[2, length];
+                int[] array2;
+                array2 = new int[2];
+                int[] array3;
+                array3 = array2;
+                for (int k = 0; k < 2; k++)
+                {
+                    int num2;
+                    num2 = 3 + k;
+                    int num3;
+                    num3 = 128 << 8 * k;
+                    int num4;
+                    num4 = num3 - 1;
+                    List<byte> list3;
+                    list3 = new List<byte>();
+                    array[k, array3[k]++] = (byte)(k + 1);
+                    for (int l = 0; l < list.Count; l++)
+                    {
+                        num = list2[l];
+                        if (num >= num2)
+                        {
+                            if (list3.Count > 0)
+                            {
+                                if (k == 0)
+                                {
+                                    array[k, array3[k]++] = (byte)list3.Count;
+                                }
+                                else
+                                {
+                                    array[k, array3[k]++] = (byte)(list3.Count >> 8);
+                                    array[k, array3[k]++] = (byte)list3.Count;
+                                }
+                                foreach (byte item in list3)
+                                {
+                                    array[k, array3[k]++] = item;
+                                }
+                                list3.Clear();
+                            }
+                            while (num > 0)
+                            {
+                                int num5;
+                                num5 = num3 + Math.Min(num, num4);
+                                if (k == 0)
+                                {
+                                    array[k, array3[k]++] = (byte)num5;
+                                }
+                                else
+                                {
+                                    array[k, array3[k]++] = (byte)(num5 >> 8);
+                                    array[k, array3[k]++] = (byte)num5;
+                                }
+                                array[k, array3[k]++] = list[l];
+                                num -= num4;
+                            }
+                            continue;
+                        }
+                        if (list3.Count + num > num4)
+                        {
+                            if (k == 0)
+                            {
+                                array[k, array3[k]++] = (byte)list3.Count;
+                            }
+                            else
+                            {
+                                array[k, array3[k]++] = (byte)(list3.Count >> 8);
+                                array[k, array3[k]++] = (byte)list3.Count;
+                            }
+                            foreach (byte item2 in list3)
+                            {
+                                array[k, array3[k]++] = item2;
+                            }
+                            list3.Clear();
+                        }
+                        for (int m = 0; m < num; m++)
+                        {
+                            list3.Add(list[l]);
+                        }
+                    }
+                    if (list3.Count > 0)
+                    {
+                        if (k == 0)
+                        {
+                            array[k, array3[k]++] = (byte)list3.Count;
+                        }
+                        else
+                        {
+                            array[k, array3[k]++] = (byte)(list3.Count >> 8);
+                            array[k, array3[k]++] = (byte)list3.Count;
+                        }
+                        foreach (byte item3 in list3)
+                        {
+                            array[k, array3[k]++] = item3;
+                        }
+                        list3.Clear();
+                    }
+                    array[k, array3[k]++] = 0;
+                    if (k == 1)
+                    {
+                        array[k, array3[k]++] = 0;
+                    }
+                }
+                int num6;
+                num6 = ((array3[0] > array3[1]) ? 1 : 0);
+                int num7;
+                num7 = array3[num6];
+                for (int n = 0; n < num7; n++)
+                {
+                    output.Write8(array[num6, n]);
+                }
+            }
+
+
+
+            byte[] returnvalue = new byte[8 + output.Length];
+            BitConverter.GetBytes(RLEHEADER).CopyTo(returnvalue, 0);
+            BitConverter.GetBytes(output.Length).CopyTo(returnvalue, 4);
+            output.CopyToArray(0, returnvalue, 8, (int)output.Length);
+
+            return output.Data;
+        }
 
         private static byte[] oldFrame = null;
         public static byte[] Compress(ref byte[] buffer, int enableCircleComp = 3)
@@ -105,39 +266,12 @@ namespace Video2Gba
 
             byte[] lz = LzCompress(buffer);
             byte[] diff = FrameCompareComp(buffer);
-            byte[] difflz = LzCompress(diff);
-            byte[] huff = new byte[1];
-            //byte[] dic = LutComp(buffer, enableCircleComp);
-            //using (MemoryStream m = new MemoryStream(buffer))
-            //{
-            //    byte[] tmp = new byte[20000000];
-
-            //    using (MemoryStream m2 = new MemoryStream(tmp))
-            //    {
-            //        Huffman4 h = new Huffman4();
-
-            //     int size=   h.Compress(m, buffer.Length, m2);
-            //        huff = new byte[size];
-            //        Array.Copy(tmp, huff,  size);
-            //} }
-
-            //using (MemoryStream m = new MemoryStream(buffer))
-            //{
-            //    byte[] tmp = new byte[20000000];
-
-            //    using (MemoryStream m2 = new MemoryStream(tmp))
-            //    {
-            //        RLE h = new RLE();
-
-            //        int size = h.Compress(m, buffer.Length, m2);
-            //        huff = new byte[size];
-            //        Array.Copy(tmp, huff, size);
-            //    }
-            //}
-
-            //new Huffman().Compress("tests/huff/dec/00.ffuh.dat", "tests/huff/cmp/00.huff4");
-            //   byte[] circle = CircleComp(buffer, enableCircleComp);
-            byte[] describe = null;
+            byte[] difflz = FrameCompareCompQuad(buffer);
+            //byte[] difflz2 = FrameCompareCompQuad2(buffer);
+            //byte[] interleave = FrameCompareCompQuadInterleaved(buffer);
+            //byte[] interleave2 = FrameCompareCompQuadInterleaved2(buffer);
+            //byte[] RlEd = CompRLE(buffer);
+        
 
             if (lz.Length < bestSize)
             {
@@ -151,32 +285,35 @@ namespace Video2Gba
                 bestData = diff;
             }
 
-            //if (huff.Length < bestSize)
+
+            if (difflz.Length < bestSize)
+            {
+                bestSize = difflz.Length;
+                bestData = difflz;
+            }
+
+            //if (difflz2.Length < bestSize)
             //{
-            //    bestSize = huff.Length;
-            //    bestData = huff;
+            //    bestSize = difflz2.Length;
+            //    bestData = difflz2;
             //}
 
-            //if (circle.Length < bestSize)
+            //if (interleave.Length < bestSize)
             //{
-            //    bestSize = circle.Length;
-            //    bestData = huff;
+            //    bestSize = interleave.Length;
+            //    bestData = interleave;
+            //}
+            //if (interleave2.Length < bestSize)
+            //{
+            //    bestSize = interleave2.Length;
+            //    bestData = interleave2;
+            //}
+            //if (RlEd.Length < bestSize)
+            //{
+            //    bestSize = RlEd.Length;
+            //    bestData = RlEd;
             //}
 
-            //if (huff.Length > bestSize)
-            //{
-            //    bestSize = huff.Length;
-            //    bestData = huff;
-            //}
-            //if (oldFrame != null && oldFrame.Length > 0)
-            //{
-            //    DescribeCompress(oldFrame, buffer);
-            //    if (describe.Length > bestSize)
-            //    {
-            //        bestSize = describe.Length;
-            //        bestData = describe;
-            //    }
-            //}
 
             byte[] file = new byte[bestSize + 4];
 
@@ -405,10 +542,10 @@ namespace Video2Gba
                         }
                     }
                     goto IL_01cf;
-                    IL_01cf:
+                IL_01cf:
                     output.Write8(data[num3++]);
                     goto IL_01de;
-                    IL_01de:
+                IL_01de:
                     if (num3 >= length)
                     {
                         break;
@@ -441,7 +578,7 @@ namespace Video2Gba
         //Run IPS on the frames//ips needs to use gba rl 
         //Run lz after rejoining.
 
-        public static byte[] FrameCompareComp(byte[] buffer)
+        public static byte[] FrameCompareComp_old(byte[] buffer)
         {
             byte[] returnValue = new byte[1];
             if (buffer.Length < 200)
@@ -495,7 +632,7 @@ namespace Video2Gba
                         quadlen += (int)str.Length;
                     }
                 }
-            }                                  
+            }
 
 
             IOStream src = new IOStream(4);
@@ -510,7 +647,325 @@ namespace Video2Gba
             return returnValue;
         }
 
+        /// <summary>
+        /// Takes a buff assuming width * height image with an RGB being two bytes.
+        /// </summary>
+        /// <param name="buff">Data source</param>
+        /// <param name="width">Source image width</param>
+        /// <param name="height">Source image height</param>
+        /// <returns>image split in 4s</returns>
+        private static List<byte[]> Buffer2Quad(byte[] buff, int width, int height)
+        {
+            if (buff.Length % 2 != 0) throw new Exception("Buffer is odd");
+            ushort[] convertBuf = new ushort[buff.Length];
+            Buffer.BlockCopy(buff, 0, convertBuf, 0, buff.Length);
 
+            //basically expandable memorystreams.
+            List<IOStream> quad = new List<IOStream>() { new IOStream(), new IOStream(), new IOStream(), new IOStream() };
+            //we are a byte so width and height is times 2
+            int w = width;
+            int h = height;
+            //240x160
+            //Handle first screen.
+            int y = 0;
+            //Top left   &&    //Top right
+            for (; y < height/2; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    //Check if capturing right
+                    if (x < width/2)
+                    {
+                        quad[0].Write16(convertBuf[y * width + x]);
+                             
+                    }
+                    else
+                    {
+                        quad[1].Write16(convertBuf[y * width + x]);
+                    }
+                }
+            }
+
+
+            //Bottom left   &&   //Bottom right
+            for (; y <  height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    //Check if capturing right
+                    if (x < width / 2)
+                    {
+                        quad[2].Write16(convertBuf[y * width + x]);
+
+                    }
+                    else
+                    {
+                        quad[3].Write16(convertBuf[y * width + x]);
+                    }
+                }
+            }
+
+
+            return new List<byte[]> { quad[0].Data, quad[1].Data, quad[2].Data, quad[3].Data, };
+        }
+
+        private static List<byte[]> Buffer2Interleave(byte[] buff, int bytewidth)
+        {
+            if (buff.Length % 2 != 0) throw new Exception("Buffer is odd");
+            ushort[] convertBuf = new ushort[buff.Length];
+            Buffer.BlockCopy(buff, 0, convertBuf, 0, buff.Length);
+
+            //basically expandable memorystreams.
+            List<IOStream> quad = new List<IOStream>();
+
+
+            for (int i = 0; i < bytewidth; i++)
+            {
+                quad.Add(new IOStream());
+            }
+
+            //we are a byte so width and height is times 2
+            int quadCount = 0;
+            for(int i =0;i<buff.Length;)
+            {
+                for (int c = 0; c < bytewidth; c++)
+                {
+                    quad[c].Write8(buff[i++]);                   
+                }
+            }
+
+
+
+            List<byte[]> returnVal = new List<byte[]>();
+            foreach (var q in quad) returnVal.Add(q.Data);
+
+
+
+            return returnVal;
+        }
+
+
+
+        public static byte[] FrameCompareCompQuad(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            List<byte[]> newBuffers = Buffer2Quad(buffer, 240, 160);
+
+
+
+            List<byte[]> old = Buffer2Quad(VideoCompression.oldFrame, 240, 160);
+
+
+            List<byte[]> compressedDifferences = new List<byte[]>();
+            int quadlen = 0;
+            Creator c = new Creator();
+            for (int i = 0; i < 4; i++)
+            {
+                using (var olds = new MemoryStream(old[i]))
+                {
+                    using (var newf = new MemoryStream(newBuffers[i]))
+                    {
+                        var str = c.Create(olds, newf);
+                        compressedDifferences.Add(str);
+                        quadlen += (int)str.Length;
+                    }
+                }
+            }
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(QUADDIFFHEADER);
+            src.WriteU32((uint)quadlen);
+
+
+            foreach (var s in compressedDifferences) src.WriteU32((uint)s.Length);
+
+            foreach (var s in newBuffers) src.WriteU32((uint)s.Length);
+            foreach (var s in compressedDifferences) src.CopyFromArray(s, s.Length);
+
+            returnValue = src.Data;
+
+            return returnValue;
+        }
+
+        public static byte[] FrameCompareCompQuad2(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            List<byte[]> newBuffers = Buffer2Quad(buffer, 240, 160);
+
+
+
+            List<byte[]> old = Buffer2Quad(VideoCompression.oldFrame, 240, 160);
+
+
+            List<byte[]> compressedDifferences = new List<byte[]>();
+            int quadlen = 0;
+            Creator c = new Creator();
+            for (int i = 0; i < 4; i++)
+            {
+                using (var olds = new MemoryStream(old[i]))
+                {
+                    using (var newf = new MemoryStream(newBuffers[i]))
+                    {
+                        var str = c.Create16(olds, newf);
+                        compressedDifferences.Add(str);
+                        quadlen += (int)str.Length;
+                    }
+                }
+            }
+
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(QUADDIFFHEADER2);
+            src.WriteU32((uint)quadlen);
+            foreach (var s in compressedDifferences) src.WriteU32((uint)s.Length);
+            foreach (var s in compressedDifferences) src.CopyFromArray(s, s.Length);
+
+            returnValue = src.Data;
+
+            return returnValue;
+        }
+        public static byte[] FrameCompareCompQuadInterleaved(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            List<byte[]> newBuffers = Buffer2Interleave(buffer, 2);
+            List<byte[]> old = Buffer2Interleave(VideoCompression.oldFrame, 2);
+
+            List<byte[]> compressedDifferences = new List<byte[]>();
+            int quadlen = 0;
+            Creator c = new Creator();
+            for (int i = 0; i < newBuffers.Count; i++)
+            {
+                using (var olds = new MemoryStream(old[i]))
+                {
+                    using (var newf = new MemoryStream(newBuffers[i]))
+                    {
+                        var str = c.Create(olds, newf);
+                        compressedDifferences.Add(str);
+                        quadlen += (int)str.Length;
+                    }
+                }
+            }
+
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(INTERLACERLEHEADER);
+            src.WriteU32((uint)quadlen);
+            foreach (var s in compressedDifferences) src.WriteU32((uint)s.Length);
+            foreach (var s in compressedDifferences) src.CopyFromArray(s, s.Length);
+
+            returnValue = src.Data;
+
+            return returnValue;
+        }
+
+        public static byte[] FrameCompareCompQuadInterleaved2(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            List<byte[]> newBuffers = Buffer2Interleave(buffer, 2);
+            List<byte[]> old = Buffer2Interleave(VideoCompression.oldFrame, 2);
+
+            List<byte[]> compressedDifferences = new List<byte[]>();
+            int quadlen = 0;
+            Creator c = new Creator();
+            for (int i = 0; i < newBuffers.Count; i++)
+            {
+                using (var olds = new MemoryStream(old[i]))
+                {
+                    using (var newf = new MemoryStream(newBuffers[i]))
+                    {
+                        var str = c.Create(olds, newf);
+                        compressedDifferences.Add(CompRLE(str));
+                        quadlen += (int)str.Length;
+                    }
+                }
+            }
+
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(INTERLACERLEHEADER2);
+            src.WriteU32((uint)quadlen);
+            foreach (var s in compressedDifferences) src.WriteU32((uint)s.Length);
+            foreach (var s in compressedDifferences) src.CopyFromArray(s, s.Length);
+
+            returnValue = src.Data;
+
+            return returnValue;
+        }
+
+        public static byte[] FrameCompareComp(byte[] buffer)
+        {
+            byte[] returnValue = new byte[1];
+            if (buffer.Length < 200)
+            {
+                return buffer;
+            }
+            if (VideoCompression.oldFrame == null)
+            {
+                return buffer;
+            }
+            //Split the arrays up.
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(DIFFHEADER);
+            Creator c = new Creator();
+            using (var olds = new MemoryStream(VideoCompression.oldFrame))
+            {
+                using (var newf = new MemoryStream(buffer))
+                {
+                    var str = c.Create(olds, newf);
+                    src.WriteU32((uint)str.Length);
+                    src.CopyFromArray(str, str.Length);
+                }
+            }
+            returnValue = src.Data;
+
+            return returnValue;
+        }
 
         public static byte[] Create3(byte[] source, byte[] target)
         {
@@ -524,6 +979,7 @@ namespace Video2Gba
                 sourcelen = 16777216;
                 sixteenmegabytes = true;
             }
+
             if (targetlen > 16777216)
             {
                 targetlen = 16777216;
@@ -548,7 +1004,6 @@ namespace Video2Gba
 
                     dics.Add(curOffset, differences);
                 }
-                
             }
 
 
