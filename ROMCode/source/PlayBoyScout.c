@@ -9,7 +9,7 @@
  #include "zelda_secret_16K_mono.h"
  */
 
-#include "lztown.h"
+#include "muta.h"
 
  /* the display control pointer points to the gba graphics register */
 volatile unsigned long* display_control = (volatile unsigned long*)0x4000000;
@@ -102,7 +102,7 @@ const uint DIFFHEADER = 0x88FFFF12;
 const uint QUADDIFFHEADER = 0x88FFFF13;
 const uint QUADDIFFHEADER2 = 0x88FFFF14;
 const uint RLEHEADER = 0x88FFFF15;
-
+const uint NINTYRLHEADERINTR = 0x88FFFF76;
 typedef struct
 {
 	unsigned long thesize;
@@ -270,6 +270,8 @@ void play_sound(const signed char* sound, int total_samples, int sample_rate, ch
 #define ARM __attribute__((__target__("arm")))
 #define REG_IFBIOS (*(unsigned short*)(0x3007FF8))
 
+//indicates if framebufer can be used as a buffer or not.
+int canDmaImage;
 int vblankcounter = 0;
 /* this function is called each vblank to get the timing of sounds right */
 ARM void on_vblank() {
@@ -286,7 +288,7 @@ ARM void on_vblank() {
 			/* restart the sound again when it runs out */
 			channel_a_vblanks_remaining = channel_a_total_vblanks;
 			*dma1_control = 0;
-			*dma1_source = (unsigned int)lztown;
+			*dma1_source = (unsigned int)muta;
 			*dma1_control = DMA_DEST_FIXED | DMA_REPEAT | DMA_32 |
 				DMA_SYNC_TO_TIMER | DMA_ENABLE;
 		}
@@ -304,7 +306,7 @@ ARM void on_vblank() {
 			channel_b_vblanks_remaining--;
 		}
 
-		memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
+	  if(canDmaImage)	memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
 	}
 	vblankcounter++;
 	/* restore/enable interrupts */
@@ -313,9 +315,10 @@ ARM void on_vblank() {
 	*interrupt_enable = 1;
 
 }
-
+void* workArea=0x2002000;
 void Setup()
 {
+canDmaImage=1;
 	/* create custom interrupt handler for vblank - whole point is to turn off sound at right time
 	   * we disable interrupts while changing them, to avoid breaking things */
 	*interrupt_enable = 0;
@@ -341,28 +344,30 @@ int  Lz77Uncomp(int src, int dst)
 {
 	asm("swi 0x12"); ;
 }
-
-//set bit 24 on size for word fill 
-int  CpuFastSet(int src, int dst, int size)
+int  RLUncomp(int src, int dst)
 {
-	asm("swi 0xC"); ;
+	asm("swi 0x14"); ;
+}
+/*
+The length must be a multiple of 4 bytes (32bit mode) or 2 bytes (16bit mode). The (half)wordcount in r2 must be length/4 (32bit mode) or length/2 (16bit mode), ie. length in word/halfword units rather than byte units.
+
+  r0    Source address        (must be aligned by 4 for 32bit, by 2 for 16bit)
+  r1    Destination address   (must be aligned by 4 for 32bit, by 2 for 16bit)
+  r2    Length/Mode
+          Bit 0-20  Wordcount (for 32bit), or Halfwordcount (for 16bit)
+          Bit 24    Fixed Source Address (0=Copy, 1=Fill by {HALF}WORD[r0])
+          Bit 26    Datasize (0=16bit, 1=32bit)
+
+*/
+int _CpuSet(int  src, int  dst, int size)
+{
+	asm("swi 0xb"); ;
 }
 
-int FillByCharCpu(unsigned char val, int dst, int size)
-{
-    int test=0;
-    int * hey = &test;
-    hey[0]=val;
-    hey[1]=val;
-    hey[2]=val;
-    hey[3]=val;
-    CpuFastSet(hey, dst, size/4);
-   
 
-}
 void Exception(int errorcode, char* msg)
 {
-
+    _CpuSet(msg, 0x3000000, 128);
 	while (1);
 
 }
@@ -370,7 +375,7 @@ void Exception(int errorcode, char* msg)
 unsigned short Read16(unsigned char* src)
 {
 	//return (src[0] << 8) | src[1];
-return *(unsigned short*)src;
+	return *(unsigned short*)src;
 }
 unsigned long Read32(unsigned char* src)
 {
@@ -379,71 +384,222 @@ unsigned long Read32(unsigned char* src)
 }
 
 
-
-const int EndOfFile =  0x00464F45;
+//pls implement cpuset as cpufastset requires divisible by 32
+const int EndOfFile = 0x00464F45;
 const int EndOfFile2 = 0x00454F46;
 const int CompHeader = 0x504d4f43;
+//Calls cpuset using appropriate flags.
+int CpuSet(unsigned char*  src, unsigned char*  dst, int size, char fill, char isu32)
+{
+	int fillFlag =  (fill & 1) << 24;
+    int u32Flag = (isu32 & 1) << 26;
+    int maxLen=(1<<20);
+    for(int s = 0; s<size-1;)
+	{        
+        int CopySize = size > maxLen ? size-maxLen : size;
+        s+=CopySize;
+		_CpuSet(src, dst, (CopySize/(2 + isu32*2)) | fillFlag | u32Flag);
+	}
+}
+
+
+int FillByCharCpu(unsigned char val, int* dst, int size)
+{
+	int test = 0;
+	//make a word from our val lol
+	ushort hey[2] = {val, val};
+
+    CpuSet(&hey, dst, size, 1,0);	
+}
+
 void Fill(unsigned char* ptr, unsigned char val, unsigned long size)
 {
-if(size % 8 ==0)
-{ 
-  FillByCharCpu(val, ptr, size);
-  return; 
+	if(size>8)
+	{      
+		FillByCharCpu(val, ptr, size);
+		return;
+	}
+	for (register int c = 0; c < size;c++) *(ptr++) = val;
 }
-	for (int c = 0; c < size;c++)*(ptr++) = val;
+
+void Copy(unsigned char* src, unsigned char* dst, unsigned long size)
+{    
+	if(size>8)
+	{      
+        if(size % 4 ==0)
+        {
+			CpuSet(src, dst, size,0,1);
+			return;
+        }
+		CpuSet(src, dst, size,0,0);
+		return;
+	}
+
+	for (register int c = 0; c < size;c++) *(dst++) = *(src++);
 }
 
-
-
-
-void Copy(unsigned char* ptr, unsigned char* dst, unsigned long size)
-{
-
-   if(size % 8 ==0)
-   {
-      CpuFastSet(dst, ptr, size/4);
-   return;
-   }
-
-
- 
-
-	for (int c = 0; c < size;c++)*(dst++) =  *(ptr++);    
-}
 void UncompIPSRLE(unsigned char* src, unsigned char* dst)
 {
+	if (dst == 0)
+	{
+		Exception(0,  "DESTINATION IS 0");
+	}
 	register unsigned char* patch = src;
-    register int header=Read32(patch); patch += 4;
-    if(header!=CompHeader) while(1);
-    
+	register int header = Read32(patch); patch += 4;
+	if (header != CompHeader) Exception(0,  "HEADER DOES NOT MATCH");
+
 	register int offset = Read32(patch); patch += 4;
 	register ushort size = 0;
 	register int s = 0;
 	while (offset != EndOfFile)
 	{
 		size = Read16(patch); patch += 2;
-		unsigned char* target = dst[offset];
+		unsigned char* target = (unsigned char*)&dst[offset];
 		// If RLE patch.
 		if (size == 0x6969)
 		{
 			size = Read16(patch); patch += 2;
-            unsigned char val = *patch; patch++;
+			unsigned char val = *patch; patch++;
 			Fill(target, val, size);
 		}
 		// If normal patch.
 		else
 		{
-          Copy(target, patch, size);
-		  patch += size;
+			Copy(patch, target, size);
+			patch += size;
 		}
 		offset = Read32(patch); patch += 4;
 	}
 }
 
+signed int GbatroidDecomp(int size, unsigned char *src, unsigned char *dst)
+{
+  signed int maxSize; // r5
+  int encodedSizeCheck; // r5
+  unsigned char *nextSrc; // r1
+  unsigned char *nextDst; // r2
+  unsigned char *dstAddr; // r6
+  signed int srccnt; // r4
+  int curVal; // r0
+  unsigned char *nextAddr; // r1
+  int compCheck; // r3
+  int i; // r3
+  int bit16Val; // r3
+  unsigned char *nextByte; // r1
+  int bit16Check; // r3
+  int j; // r3
+  int v17; // r3
+ unsigned char *v18; // r1
 
-typedef struct{ unsigned long cmpsize[4]; unsigned long decmpsize[4]; unsigned char* pnt; } help;
+  size = size;
+  maxSize = 0;
+  if ( size )
+  {
+    if ( size != 1 )
+    {
+      *dst = *src;
+      nextSrc = src + 1;
+      nextDst = dst + 1;
+      *nextDst++ = 0;
+      *nextDst = *nextSrc;
+      src = nextSrc + 1;
+      *++nextDst = 0;
+      dst = nextDst + 1;
+    }
+  }
+  else
+  {
+    encodedSizeCheck = *src++;
+    if ( encodedSizeCheck )
+    {
+      if ( encodedSizeCheck != 1 && encodedSizeCheck != 2 )
+      {
+        maxSize = 0x2000;
+      }
+      else
+      {
+        maxSize = 0x1000;
+      }
+    }
+    else
+    {
+      maxSize = 0x800;
+    }
+  }
+  dstAddr = dst;
+  srccnt = 0;
+  do
+  {
+    curVal = *src;
+    nextAddr = src + 1;
+    if ( curVal == 1 )
+    {
+      compCheck = *nextAddr;
+      src = nextAddr + 1;
+      ++srccnt;
+      for ( ; compCheck; ++src )
+      {
+        if ( compCheck & 0x80 )
+        {
+          for ( i = compCheck & 0x7F; i; --i )
+          {
+            *dst = *src;
+            dst += 2;
+          }
+          ++src;
+        }
+        else
+        {
+          while ( compCheck )
+          {
+            *dst = *src++;
+            dst += 2;
+            --compCheck;
+          }
+        }
+        compCheck = *src;
+      }
+    }
+    else
+    {
+      bit16Val = *nextAddr;
+      nextByte = nextAddr + 1;
+      bit16Check = (bit16Val << 8) | *nextByte;
+      src = nextByte + 1;
+      ++srccnt;
+      for ( ; bit16Check; src = v18 + 1 )
+      {
+        if ( bit16Check & 0x8000 )
+        {
+          for ( j = bit16Check & 0x7FFF; j; --j )
+          {
+            *dst = *src;
+            dst += 2;
+          }
+          ++src;
+        }
+        else
+        {
+          while ( bit16Check )
+          {
+            *dst = *src++;
+            dst += 2;
+            --bit16Check;
+          }
+        }
+        v17 = *src;
+        v18 = src + 1;
+        bit16Check = (v17 << 8) | *v18;
+      }
+    }
+    dst = dstAddr + 1;
+  }
+  while ( srccnt <= 1 );
+  return maxSize;
+}
+typedef struct { unsigned long cmpsize[4]; unsigned long decmpsize[4]; unsigned char* pnt; } help;
 
-
+typedef struct { unsigned long cmpsize[4];  unsigned char* pnt; } help2;
 
 void FrameCompareCompQuad(unsigned char* src, unsigned char* dst)
 {
@@ -451,37 +607,96 @@ void FrameCompareCompQuad(unsigned char* src, unsigned char* dst)
 	//src will point to size table, then serialized array
 	int compBufferIndex = 0;//pointer inside buffer
 
-help* k = (src);
-	/*unsigned long* sizes = src+4;
-	unsigned long* decompsizes = sizes + 16;//4*4
-
-
-	unsigned char* compBufferStart = (unsigned char*)(decompsizes + 16);//4*4
-
-
-	for (int i = 0;i < 4;i++) {
-		UncompIPSRLE(compBufferStart, tgt);
-		compBufferStart += sizes[i];
-		tgt += decompsizes[i];
-	}
-*/
-
+	help* k = (src);
 
 	unsigned char* compBufferStart = &k->pnt;
 
-
-	for (int i = 0;i < 4;i++) {
-
-
-
+	for (int i = 0;i < 4;i++) 
+    {
 		UncompIPSRLE(compBufferStart, tgt);
 		compBufferStart += k->cmpsize[i];
 		tgt += k->decmpsize[i];
 	}
+}
+
+void FrameCompareCompQuadnintyo(unsigned char* src, unsigned char* dst)
+{
+	unsigned char* tgt = dst;
+	//src will point to size table, then serialized array
+	int compBufferIndex = 0;//pointer inside buffer
+
+	help2* k = (src);
+
+	unsigned char* compBufferStart = &k->pnt;
+
+	for (int i = 0;i < 4;i++) 
+    {
+		int sz = RLUncomp(compBufferStart, tgt);
+		compBufferStart += k->cmpsize[i];
+		tgt += sz;
+	}
+}
+void ApplyDifferences(unsigned char* src, unsigned char* dst)
+{
+   unsigned char* p = src;
+   int count=*p;p+=4;
+   int* offsets = *p; p+=4*count; 
+   unsigned char* data = p;
+   for(int i=0;i<count;i++)
+   {
+        int byteCount = *(unsigned long*)data; data+=4;
+//(unsigned char*  src, unsigned char*  dst, int size, char fill, char isu32)
+        CpuSet(data, dst[offsets[i]], byteCount,0,0);
+
+   }
+
+
+  
 
 }
 
 
+void FrameCompare(unsigned char* src, unsigned char* dst)
+{
+	unsigned char* tgt = dst;
+unsigned char* patch = src;
+	//src will point to size table, then serialized array
+	int compBufferIndex = 0;//pointer inside buffer
+
+//	help2* k = (src);2
+
+	
+    unsigned short arrayCount = *(unsigned short*)patch; patch+=2;
+    unsigned char* compressTable = (unsigned char*)patch;patch+=1*arrayCount;
+    unsigned long* compressSizes=(unsigned long*)patch; patch+=4*arrayCount;
+unsigned char* compBufferStart=patch;
+	for (int i = 0;i < arrayCount;i++) 
+    {
+		int diffOffset=compBufferStart;
+		int sz=0;
+        switch(compressTable[i])
+        {
+         
+         case 1:
+			diffOffset=workArea;
+           sz=Lz77Uncomp(compBufferStart, diffOffset);
+                 break;
+         case 2:
+			diffOffset=workArea;
+			sz = RLUncomp(compBufferStart, diffOffset);		
+                 break;
+        }      
+
+
+
+        ApplyDifferences(diffOffset, tgt);
+	
+		compBufferStart += compressSizes[i];
+		tgt += sz;
+	}
+}
+
+const uint NINTYRLHEADER = 0x88FFFF75;
 CompFrame* HandleCompression(CompFrame* result)
 {
 	int compheader; // r2
@@ -503,6 +718,7 @@ CompFrame* HandleCompression(CompFrame* result)
 	else if (compheader == LZCOMPRESSEDHEADER)//Decompresses LZ from src lz to decomp dst
 	{
 		Lz77Uncomp(&result->source, dst);
+		canDmaImage=1;
 	}
 	else if (compheader == DIFFHEADER)//Applies differences from a src frame and a target frame for minimal compression
 	{
@@ -520,6 +736,18 @@ CompFrame* HandleCompression(CompFrame* result)
 	{
 		Exception(RLEHEADER, "Not Supported");
 	}
+    else if(compheader == NINTYRLHEADER)
+	{
+        // FrameCompareCompQuadninty(&result->source, dst);
+         
+	}
+    else if(compheader == NINTYRLHEADERINTR)
+	{
+         FrameCompare(&result->source, dst); 
+		 canDmaImage=0;        
+	}
+
+
 
 
 	return result;
@@ -544,7 +772,7 @@ int main() {
 		if (FrameCounter >= FrameCount)
 		{
 			FrameCounter = 0;
-			play_sound(lztown, lztown_size, 10512, 'A');
+			play_sound(muta, muta_size, 10512, 'A');
 		}
 
 		if (CanDraw) {

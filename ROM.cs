@@ -28,6 +28,8 @@ namespace Video2Gba
             headerLines.Add(comment);
 
 
+            sourceLines.Add($"char* ArrayName_{ArrayName}7 = \"{ArrayName}\";\n");//so we know what file we're actually fucking with.
+
             sourceLines.Add($"const unsigned char {ArrayName}[] = {{\n\t");
             string thislIne = "";
             while (counter < length)
@@ -71,7 +73,7 @@ namespace Video2Gba
             headerLines.Add($"#endif //_{ArrayName}_h_\n");
             headerLines.Add(comment);
 
-
+            sourceLines.Add($"char* ArrayName_{ArrayName} = \"{ArrayName}\";\n");//so we know what file we're actually fucking with.
             sourceLines.Add($"const unsigned char {ArrayName}[] = {{\n\t");
             string thislIne = "";
             while (counter < length)
@@ -92,6 +94,7 @@ namespace Video2Gba
 
             sourceLines.Add($"\n}};\n");
             sourceLines.Add($"const int {ArrayName}_size = sizeof({ArrayName});\n");
+  
             File.WriteAllLines($"{outputdir}\\{ArrayName}.h", headerLines);
             File.WriteAllLines($"{outputdir}\\{ArrayName}.c", sourceLines);
             return;

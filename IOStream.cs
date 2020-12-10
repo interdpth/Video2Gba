@@ -7,10 +7,8 @@ using System.Threading.Tasks;
 
 namespace Video2Gba
 {
-    public class IOStream
+    public class IOStream : Stream
     {
-        private const int size32mb = 33554432;
-
         private byte[] data;
 
         private int pos;
@@ -19,9 +17,9 @@ namespace Video2Gba
 
         public byte[] Data => data;
 
-        public int Position => pos;
+        public override long Position { get { return pos; } set { pos = (int)value; } }
 
-        public int Length => length;
+        public override long Length => length;
 
         private int Capacity
         {
@@ -34,6 +32,51 @@ namespace Video2Gba
                 Array.Resize(ref data, value);
             }
         }
+
+        public override bool CanRead
+        {
+            get
+            {
+               return true;
+            }
+        }
+
+        public override bool CanSeek
+        {
+            get
+            {
+                return true;
+            }
+        }
+
+        public override bool CanWrite
+        {
+            get
+            {
+                return true;
+            }
+        }
+
+        //public override long Length
+        //{
+        //    get
+        //    {
+        //        return (long)length;
+        //    }
+        //}
+
+        //public override long Position
+        //{
+        //    get
+        //    {
+        //        return (int)Position;
+        //    }
+
+        //    set
+        //    {
+        //        Position = (int)value;
+        //    }
+        //}
 
         public IOStream(int capacity = 4)
         {
@@ -48,25 +91,6 @@ namespace Video2Gba
             pos = 0;
             length = data.Length;
         }
-
-        //private void Resize()
-        //{
-        //    int num;
-        //    num = Capacity * 2;
-        //    while (length > num)
-        //    {
-        //        num *= 2;
-        //    }
-        //    if (num > 33554432)
-        //    {
-        //        if (length > 33554432)
-        //        {
-        //            return;
-        //        }
-        //        num = 33554432;
-        //    }
-        //    Capacity = num;
-        //}
 
         public void Seek(int offset)
         {
@@ -136,7 +160,14 @@ namespace Video2Gba
             pos += len;
             return @string;
         }
+        public void Write24(int value)
+        {
 
+            Write32(value);
+            //Write8((byte)(value >> 16));
+            //Write8((byte)(value >> 8));
+            //Write8((byte)(value));
+        }
         public void Write8(byte val)
         {
             if (pos >= length)
@@ -190,7 +221,7 @@ namespace Video2Gba
             pos += 4;
         }
 
-        public void WriteU32(Int32 val)
+        public void WriteU32(UInt32 val)
         {
             while (pos % 4 != 0)
             {
@@ -256,12 +287,12 @@ namespace Video2Gba
 
         public ushort Read16(int offset)
         {
-            return (ushort)(data[offset] | (data[offset + 1] << 8));
+            return (ushort)(BitConverter.ToInt16(data,offset));
         }
 
         public int Read32(int offset)
         {
-            return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+            return (ushort)(BitConverter.ToInt32(data, offset));
         }
 
         public int ReadPtr(int offset)
@@ -284,16 +315,20 @@ namespace Video2Gba
 
         public void Write16(int offset, ushort val)
         {
-            data[offset] = (byte)val;
-            data[offset + 1] = (byte)(val >> 8);
+          //  data[offset] = (byte)val;
+          //  data[offset + 1] = (byte)(val >> 8);
+
+            Array.Copy(BitConverter.GetBytes(val), 0, data, offset, 2);
         }
 
         public void Write32(int offset, int val)
         {
-            data[offset] = (byte)val;
-            data[offset + 1] = (byte)(val >> 8);
-            data[offset + 2] = (byte)(val >> 16);
-            data[offset + 3] = (byte)(val >> 24);
+            //data[offset] = (byte)val;
+            //data[offset + 1] = (byte)(val >> 8);
+            //data[offset + 2] = (byte)(val >> 16);
+            //data[offset + 3] = (byte)(val >> 24);
+
+            Array.Copy(BitConverter.GetBytes(val), 0, data, offset, 4);
         }
 
         public void WritePtr(int offset, int val)
@@ -315,16 +350,13 @@ namespace Video2Gba
         {
             Buffer.BlockCopy(data, srcOffset, dstData, dstOffset, len);
         }
-
-
-
+        
         public void CopyFromArray(Array srcData, int srcOffset, int dstOffset, int len)
         {
           
             Buffer.BlockCopy(srcData, srcOffset, data, dstOffset, len);
         }
-
-
+        
         public void CopyFromArray(Array srcData, int len)
         {
             if (pos + len > data.Length)
@@ -689,6 +721,46 @@ namespace Video2Gba
             binaryWriter = new BinaryWriter(File.Open(outputFile, FileMode.Create));
             binaryWriter.Write(data, 0, length);
             binaryWriter.Close();
+        }
+
+        public override void Flush()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            pos = (int)offset;
+            return pos;
+        }
+
+        public override void SetLength(long value)
+        {
+            Capacity = (int)value;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Buffer.BlockCopy(buffer, 0, data, offset, count);
+            return 0;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            int oldPos = (int)Position;
+            if (count + offset > Capacity)
+            {
+                Capacity = count + offset;
+            }
+            pos = offset;
+            
+            for(int i = 0; i<count; i++)
+            {
+                Write8(buffer[i]);
+            }
+
+            pos = oldPos;
+       
         }
     }
 
