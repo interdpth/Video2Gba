@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Video2Gba.LibIpsNet;
 
@@ -20,6 +22,66 @@ namespace Video2Gba
             frame.CopyTo(buffer, 8);
 
             return buffer;
+        }
+
+
+
+        public static byte[] DiffFrame(byte[] frame, byte[] newf)
+        {
+
+
+
+            short[] oldframe = new short[frame.Length / 2];
+            short[] newframe = new short[frame.Length / 2];
+
+            Array.Copy(frame, oldframe, frame.Length/2);
+
+            Array.Copy(newf, newframe, frame.Length/2);
+
+            IOStream stream = new IOStream(8);
+
+
+            BitConverter.GetBytes(0x88FFFF22).CopyTo(stream.Data, 0);
+
+            for(int i = 0; i < oldframe.Length;i++)
+            {
+                //if it's more than a pixel we copy. 
+
+                int src = oldframe[i];
+                int cmp = newframe[i];
+
+
+                if(src!=cmp)
+                {
+                    if (i + 1 == oldframe.Length - 1) break; // WE finish up.
+                    int copyCounter = i;
+                    for(;copyCounter < oldframe.Length; copyCounter++)
+                    {
+                       src = oldframe[copyCounter];
+                       cmp = newframe[copyCounter];
+                        if(src == cmp)
+                        {
+                            //we done.
+                            break;
+                        }
+                    }
+                  
+                    stream.Write32(i);
+                    int size = copyCounter - i;
+                    stream.Write32(size);
+                    //Array time
+                    foreach (ushort a in newframe.ToList().GetRange(i, size).ToArray())
+                    { 
+                        stream.Write16(a);
+                    }
+                  
+                }
+            
+
+            }
+
+
+            return stream.Data;
         }
 
         public static byte[] LzCompress(byte[] frame)
@@ -415,67 +477,62 @@ namespace Video2Gba
             return io.Data;
         }
 
-        public static byte[] FrameCompare(byte[] buffer)
-        {
-            byte[] returnValue = new byte[1];
-            if (buffer.Length < 200)
-            {
-                return buffer;
-            }
-            if (VideoCompression.oldFrame == null)
-            {
-                return buffer;
-            }
-            //Split the arrays up.
-            List<byte[]> newerBuffers = BufferHelper.Buffer2QuadStraight(buffer);
+        //public static byte[] FrameCompare(byte[] buffer)
+        //{
+        //    byte[] returnValue = new byte[1];
+        //    if (buffer.Length < 200)
+        //    {
+        //        return buffer;
+        //    }
+        //    if (VideoCompression.oldFrame == null)
+        //    {
+        //        return buffer;
+        //    }
+        //    //Split the arrays up.
 
-            List<byte[]> oldBuffers = BufferHelper.Buffer2QuadStraight(VideoCompression.oldFrame);
-            List<byte[]> newBuffers = new List<byte[]>() { new byte[1], new byte[1], new byte[1], new byte[1] };
+        //    IOStream src = new IOStream(4);
+        //    src.Seek(0);
+        //    src.WriteU32(CompressionHeaders.NINTYRLHEADERINTR);
 
-          
-            IOStream src = new IOStream(4);
-            src.Seek(0);
-            src.WriteU32(CompressionHeaders.NINTYRLHEADERINTR);
-            src.Write16((ushort)newerBuffers.Count);
-            for (int i =0;i< newerBuffers.Count;i++)
-            {   
-                newBuffers[i] = GetDifferences(oldBuffers[i], newerBuffers[i]);
-                var lz = VideoCompression.CompLZ77(newBuffers[i]).Data;
-                var rl = VideoCompression.RLCompWrite(newBuffers[i]);
-                int compressionType = 0;
-                int bestSize = newBuffers[i].Length;
-                if (bestSize > lz.Length)
-                {
-                    bestSize = lz.Length;
-                    newBuffers[i] = lz;
-                    compressionType = 1;
-                }
+        //    for (int i =0;i< newerBuffers.Count;i++)
+        //    {   
+        //        newBuffers[i] = GetDifferences(oldBuffers[i], newerBuffers[i]);
+        //        var lz = VideoCompression.CompLZ77(newBuffers[i]).Data;
+        //        var rl = VideoCompression.RLCompWrite(newBuffers[i]);
+        //        int compressionType = 0;
+        //        int bestSize = newBuffers[i].Length;
+        //        if (bestSize > lz.Length)
+        //        {
+        //            bestSize = lz.Length;
+        //            newBuffers[i] = lz;
+        //            compressionType = 1;
+        //        }
 
-                if (bestSize > rl.Length)
-                {
-                    newBuffers[i] = rl;
-                    compressionType = 2;
-                }
+        //        if (bestSize > rl.Length)
+        //        {
+        //            newBuffers[i] = rl;
+        //            compressionType = 2;
+        //        }
 
-                src.Write8((byte)compressionType);         
-            }
+        //        src.Write8((byte)compressionType);         
+        //    }
 
  
 
-            foreach (var s in newBuffers) src.WriteU32((uint)s.Length);
-            foreach (var s in newBuffers) src.CopyFromArray(s, s.Length);
+        //    foreach (var s in newBuffers) src.WriteU32((uint)s.Length);
+        //    foreach (var s in newBuffers) src.CopyFromArray(s, s.Length);
 
-            returnValue = src.Data;
+        //    returnValue = src.Data;
 
-            return returnValue;
-        }
+        //    return returnValue;
+        //}
 
 
         public static void CompressFile2(ref byte[] buffer, string fn, string output, int enableCircleComp = 3)
         {
             Console.WriteLine("Compressing to " + fn);
 
-            ROM.MakeSource(fn, Compress(ref buffer), output);
+            ROM.MakeSource(fn, Compress(buffer), output);
 
             VideoCompression.oldFrame = buffer;
 
@@ -488,38 +545,220 @@ namespace Video2Gba
         {
             Console.WriteLine("Compressing to " + fn);
 
-            File.WriteAllBytes(fn, Compress(ref buffer));
+            File.WriteAllBytes(fn, Compress(buffer));
             VideoCompression.oldFrame = buffer;
         }
-        public static byte[] Compress(ref byte[] buffer, int enableCircleComp = 3)
+        public static int GetComparePercent(int[] newBuf, int[] oldBuf)
+        {
+            int similar = 0;
+
+
+            for (int i = 0; i < newBuf.Length; i++)
+            {
+                if (newBuf[i] != oldBuf[i])
+                {
+                    similar++;
+                }
+            }
+
+            float calc = similar / oldBuf.Length;
+            float calc2 = calc * 100;
+            int ret = (int)(calc2);
+            if (ret != 0)
+            {
+                return ret;
+            }
+            return ret;
+        }
+
+        //num bytes, 
+        public static byte[] DiffCompress(byte[] newFrame, byte[] oldFrame)
+        {
+            List<int> frameData = new List<int>();
+            frameData.Add(0xFFFFFFF);//we use this later.
+            if (newFrame.Length != oldFrame.Length) throw new Exception("I can't do this Starfox");
+
+            //Get frames as 4 bytes a piece.
+            int[] betterNewFrame = new int[newFrame.Length / 4];
+            int[] betterOldFrame = new int[newFrame.Length / 4];
+
+            //Copy byte buffer to abvove buffer
+            Array.Copy(newFrame, betterNewFrame, newFrame.Length / 4);
+            Array.Copy(oldFrame, betterOldFrame, newFrame.Length / 4);
+
+
+            int count = 0;
+            for (; count < betterOldFrame.Length; count++)
+            {
+                int old = betterOldFrame[count];
+                int newb = betterNewFrame[count];
+
+                if (old == newb) continue;
+
+                //A color will be 4 bytes, 
+                int start = 50;
+
+                if (count + start > betterOldFrame.Length)
+                {
+                    start = betterOldFrame.Length - count;
+                }
+                //we want a 80 percent difference. 
+                int[] rng1 = betterNewFrame.ToList().GetRange(count, start).ToArray(); //Copy X many bytes
+                int[] rng2 = betterOldFrame.ToList().GetRange(count, start).ToArray();
+
+                //if (GetComparePercent(rng1, rng2) > 25)
+                //{
+                int buffersize = start;
+
+                //We have a start
+                int off = count;
+                int size = buffersize;
+
+
+                frameData.Add(off);
+                frameData.Add(size * 4);
+                frameData.AddRange(betterNewFrame.ToList().GetRange(count, buffersize));
+                count += buffersize;
+                continue;
+                // }
+            }
+
+            if (frameData.Count == 0)
+            {//If we got here, it's a special packet. Because somehow the whole frame was the same. 
+
+                frameData.Add(0);
+                int valu = -1;
+                frameData.Add(valu);
+                // frameData.Add(frameData.Count*4);
+            }
+
+            frameData[0] = count;//Decoder needs to +1 this value.
+            int len2 = sizeof(int);
+            byte[] validData = new byte[frameData.Count * 4];
+
+            IntPtr toByte = Marshal.AllocHGlobal(frameData.Count * 4);
+            int[] arr = frameData.ToArray();
+            IntPtr srcz = Marshal.AllocHGlobal(frameData.Count * 4);
+
+            //Copy frame data to src.
+            Marshal.Copy(frameData.ToArray(), 0, srcz, frameData.Count);
+
+
+            for (int i = 0; i < frameData.Count * 4; i++)
+            {
+                byte val = Marshal.ReadByte(srcz + i);
+                Marshal.WriteByte(toByte + i, val);
+            }
+
+            Marshal.Copy(toByte, validData, 0, frameData.Count * 4);
+
+
+            Marshal.FreeHGlobal(toByte);
+            Marshal.FreeHGlobal(srcz);
+
+
+
+            IOStream src = new IOStream(4);
+            src.Seek(0);
+            src.WriteU32(CompressionHeaders.PATCHHEADER);
+
+            src.Seek(8);
+
+
+            src.Write(validData, 8, validData.Length);
+            //write size to file
+            src.Seek(4);
+            src.WriteU32((UInt32)(src.Length - 8));
+
+
+            return src.Data;
+        }
+
+        public static byte[] Compress(byte[] buffer, int enableCircleComp = 3)
         {
 
             byte[] bestData = RawFrame(buffer);
 
             //See who has best data. 
-            int bestSize = buffer.Length;//raw 
+            int bestSize = bestData.Length;//raw 
 
-            byte[] lz = LzCompress(buffer);
-            // byte[] diff = FrameCompare(buffer);
-            ////  byte[] difflz = FrameCompareCompQuad(buffer);
-
-
-            //byte[] nint2 = FrameCompareCompQuadNinty2(buffer);
-            //byte[] nint3 = FrameCompareCompQuadNinty3(buffer);
-            //byte[] nint4 = FrameCompareCompQuadNinty4(buffer);
-
-            //byte[] RlEd = VideoCompression.GBatroidRLE(buffer);
+            //   byte[] lz = LzCompress(buffer);
+            //   // byte[] diff = FrameCompare(buffer);
+            //   ////  byte[] difflz = FrameCompareCompQuad(buffer);
 
 
-            //byte[] nint5 = LzCompress(nint4);
+            //   //byte[] nint2 = FrameCompareCompQuadNinty2(buffer);
+            //   //byte[] nint3 = FrameCompareCompQuadNinty3(buffer);
+            //   //byte[] nint4 = FrameCompareCompQuadNinty4(buffer);
 
-            //byte[] RlEd2 = LzCompress(RlEd);
+            //   //byte[] RlEd = VideoCompression.GBatroidRLE(buffer);
 
 
-            if (lz.Length < bestSize)
+            //   //byte[] nint5 = LzCompress(nint4);
+
+            //   //byte[] RlEd2 = LzCompress(RlEd);
+            //   byte[] diff = null;
+            //   Thread diffThread = null;
+            //   if (VideoCompression.oldFrame != null)
+            //   {
+
+            //       diffThread = new Thread(
+            //     () =>
+            //     {
+            //         diff = DiffCompress(buffer, VideoCompression.oldFrame);
+
+            //     });
+            //   }
+
+            //   byte[] diff2 = null;
+            //   Thread diffThread2 = null;
+            //   if (VideoCompression.oldFrame != null)
+            //   {
+
+            //       diffThread2 = new Thread(
+            //     () =>
+            //     {
+            //         diff2 = DiffFrame(VideoCompression.oldFrame,buffer );
+
+            //     });
+            //   }
+
+
+
+
+            byte[] cmp = null;
+            Thread lzThread = new Thread(
+                () =>
+                {
+                    cmp = LzCompress(buffer);
+
+                });
+            //   diffThread2?.Start();
+            //   diffThread?.Start();
+            lzThread.Start();
+
+          lzThread.Join();
+            //   diffThread?.Join();
+            //   diffThread2?.Join();
+              Thread.Sleep(100);
+            while ((lzThread != null && lzThread.IsAlive || lzThread.ThreadState == ThreadState.Running)) //|| (diffThread != null && diffThread.IsAlive && diffThread.ThreadState == ThreadState.Running))
             {
-                bestSize = lz.Length;
-                bestData = lz;
+                Thread.Sleep(20);
+            }
+            //   if (diff2 != null && diff2.Length != 0 && diff2.Length < bestSize)
+            //   {
+            //       bestSize = diff2.Length;
+            //       bestData = diff2;
+            //   }
+            //   if (diff != null && diff.Length != 0 && diff.Length < bestSize)
+            //   {
+            //       bestSize = diff.Length;
+            //       bestData = diff;
+            //   }
+            if (cmp != null && cmp.Length < bestSize)
+            {
+                bestSize = cmp.Length;
+                bestData = cmp;
             }
             //if (nint2.Length < bestSize)
             //{

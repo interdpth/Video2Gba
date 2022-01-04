@@ -27,9 +27,9 @@ namespace Video2Gba
 
     class Program
     {
-        private static string Processing = "Processing";
-        private static string OutputFolder = "Output";
-
+        private static string Processing = "F:\\Processing";
+        private static string OutputFolder = "F:\\Output";
+        public static int numFrames = 0;
         private static List<string> fileInfos = new List<string>();
         public static Semaphore sem = new Semaphore(1, 1);
 
@@ -133,11 +133,11 @@ namespace Video2Gba
 
 
 
-                    ROM.MakeSource(fn, data.ToArray(), "Output");
+                    ROM.MakeSource(fn, data.ToArray(), $"{OutputFolder}");
                 }
             }
         }
-
+        static object lockobj = new object();
 
         static void Main(string[] args)
         {
@@ -148,7 +148,7 @@ namespace Video2Gba
             var b2 = Convert.ToUInt32(b);
             Console.WriteLine("Decoding video");
             // get wav
-            //./ffmpeg -i muta.mp4 .\muta.wav
+            //./ffmpeg -i alie.mp4 .\alie.wav
             if (!Directory.Exists(Processing))
             {
                 Directory.CreateDirectory(Processing);
@@ -156,9 +156,9 @@ namespace Video2Gba
             else
             {
                 List<string> killme = Directory.GetFiles(Processing).ToList();
-                foreach (string s in killme)
+                foreach (string sz in killme)
                 {
-                    File.Delete(s);
+                    File.Delete(sz);
                 }
             }
 
@@ -169,57 +169,65 @@ namespace Video2Gba
             else
             {
                 List<string> killme = Directory.GetFiles(OutputFolder).ToList();
-                foreach (string s in killme)
+                foreach (string sz in killme)
                 {
-                    File.Delete(s);
+                    File.Delete(sz);
                 }
             }
 
-            uint fr = (ShellFile.FromFilePath("muta.mp4").Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("muta.mp4").Properties.System.Video.FrameRate.Value.Value) / 1000;
-            int targetFps =1;
-      
-            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i muta.mp4 -filter:v fps=fps={targetFps} {Processing}\\muta.mp4" };
-            
+            uint fr = (ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value.Value) / 1000;
+            int targetFps = 1;
+
+            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i alie.mp4 -ss 00:01:10 -t 00:01:05 -filter:v fps=fps={targetFps} {Processing}\\alie.mp4" };
+
             var P = Process.Start(PSI);
 
             P.WaitForExit();
 
-            float fps = (float)((float)fr  / (float)targetFps);
-            if(fps> 2.0 || fps<0.5)
+            float fps = (float)((float)fr / (float)targetFps);
+            if (fps > 2.0 || fps < 0.5)
             {
                 Console.WriteLine("Range is bad, clamping value");
                 if (fps > 2.0f) fps = 2.0f;
                 if (fps < 0.5f) fps = 0.5f;
 
             }
-            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\muta.mp4 -af atempo={fps} {Processing}\\muta.wav" };
+            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -af atempo={fps} {Processing}\\alie.wav" };
             P = Process.Start(PSI);
             P.WaitForExit();
 
-            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\muta.mp4 -s 240x160 {Processing}/tmp%03d.png" };
+            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 240x160 {Processing}/tmp%03d.png" };
             P = Process.Start(PSI);
             P.WaitForExit();
+
 
 
             List<string> images = Directory.GetFiles(Processing).ToList().Where(x => x.Contains("png")).ToList();
-
+           images =  images.OrderBy(x =>    Convert.ToInt32(new FileInfo(x).Name.Replace(".png", "").Replace("tmp",""))).ToList();
+                  
+       //     var k2 = images.OrderBy(x => Convert.ToInt32(x.Replace($"{Processing}\\tmp", "").Replace(".png", ""))).ToList();
             List<Thread> conversions = new List<Thread>();
             List<Thread> bgconversions = new List<Thread>();
             int dumblock = 0;
+            GritSharp.GritSharp s = new GritSharp.GritSharp();
 
+
+            //So what we're going to is pretty simple. 
+            //GEt all the data
+           
             for (int a = 0; a < images.Count; a++)
             {
                 string hey = images[a];
-                // var t = new Thread(
+                // var t = new Thread(//
                 //     () =>
                 //{
                 //no we try now
-                GritSharp.GritSharp s = new GritSharp.GritSharp();
+
 
                 IntPtr gritRect = s.Export(hey);
                 byte[] tmp = s.GetData();
 
-               
+
                 //PSI = new ProcessStartInfo { RedirectStandardError = true, RedirectStandardOutput = true, FileName = "grit.exe", UseShellExecute = false, Arguments = $"{hey} -gb -gB 16 -ftbin" };
                 ////creates tmp001.img.bin
                 //P = Process.Start(PSI);
@@ -232,70 +240,71 @@ namespace Video2Gba
                 try
                 {
                     byte[] data = tmp;
-                    Program.FramesInclude.Add($"#include \"{rawName}.h\"");
-                    Program.FramesTable.AppendLine("{" + rawName + "," + data.Length + "},");
-                    Thread.Sleep(100);
-                  
+
+                    ///used to write size Program.FramesTable.AppendLine("{" + rawName + "," + data.Length + "},");
+
+                    lock (lockobj)
+                    {
+                        Program.FramesTable.AppendLine("{" + rawName + "},");
+                    }
                     //insert gfx                    
                     FrameOps.CompressFile2(ref data, rawName, OutputFolder);
                     GC.Collect();
-
+                    if (a % 1000 == 0)
+                    {
+                        lock (lockobj)
+                        {
+                            Program.FramesInclude.Add($"#include \"FrameSet{a / 2}.h\"");
+                            ROM.Write(OutputFolder, $"FrameSet{a / 2}");
+                        }
+                    }
+                    lock (lockobj)
+                    {
+                        Program.numFrames++;
+                    }
                 }
                 catch (Exception e)
                 {
 
                 }
                 Console.WriteLine($"Processed {hey}");
-                //});
 
-                //Program.sem.WaitOne();
 
-                ////while (bgconversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 4) ;
-                ////while (bgconversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) != 0) ;
-                ////t2.IsBackground = true;
-                ////t2.Start();
-                ////bgconversions.Add(t2);
-                ////bgconversions.RemoveAll(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive);
-                //Program.sem.Release();
-                //}
-                //);
+            }
+            Program.FramesInclude.Add($"#include \"FrameSetFinal.h\"");
+            ROM.Write(OutputFolder, $"FrameSetFinal");
+            //while (conversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 0) ;
+            Console.WriteLine("Encoding video");
+            if (File.Exists($"{OutputFolder}//videoframes.c")) { File.Delete($"{OutputFolder}//videoframes.c"); }
+            //Wait for the others to be done.
 
-                //Wait until free
+            //while (true)
+            //{
+            //    Program.sem.WaitOne();
+            //    if (bgconversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) == 0)
+            //    {
+            //        Program.sem.Release(); break;
+            //    }
+            //    else
+            //    {
+            //        Program.sem.Release();
+            //    }
+            //    Thread.Sleep(1000);
+            //}
+            RenderAudio($"{Processing}\\Alie.wav");
+            string asm = AssembleVideoCCode(targetFps.ToString());///; ; AssembleVideoRom();
 
-                //while (conversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 4) ;
-                //t.IsBackground = true;
-                //t.Start();
-                //conversions.Add(t);
-                //conversions.RemoveAll(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive);
-
-}
-                //while (conversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) > 0) ;
-                Console.WriteLine("Encoding video");
-                if (File.Exists("Output//videoframes.c")) { File.Delete("Output//videoframes.c"); }
-                //Wait for the others to be done.
-
-                //while (true)
-                //{
-                //    Program.sem.WaitOne();
-                //    if (bgconversions.Count(x => x.ThreadState == System.Threading.ThreadState.Running || x.IsAlive) == 0)
-                //    {
-                //        Program.sem.Release(); break;
-                //    }
-                //    else
-                //    {
-                //        Program.sem.Release();
-                //    }
-                //    Thread.Sleep(1000);
-                //}
-                RenderAudio($"{Processing}\\muta.wav");
-                string asm = AssembleVideoCCode(targetFps.ToString());///; ; AssembleVideoRom();
-
-               File.WriteAllText("Output//videoframes.c", asm);
-                Console.WriteLine("Finished video");
-                //./ffmpeg 
-                //get all files
-                //256*192*
-            
+            File.WriteAllText($"{OutputFolder}//videoframes.c", asm);
+            Console.WriteLine("Finished video");
+            //./ffmpeg 
+            //get all files
+            //256*192*
+            Console.WriteLine("Best headers");
+            //foreach (var k in FrameOps.k)
+            //{
+            //    Console.WriteLine($"{k.Key.ToString("X")} - {k.Value}");
+            //}
+            Console.WriteLine("Observe");
         }
     }
 }

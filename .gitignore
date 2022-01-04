@@ -1,0 +1,6 @@
+bin/
+Debug/
+ROMCode/build
+.vs/
+packages/
+obj/

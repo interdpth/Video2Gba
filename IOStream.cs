@@ -745,6 +745,23 @@ namespace Video2Gba
             return 0;
         }
 
+
+
+        public void WriteData(Array buffer,  int elSize, int count)
+        {
+
+            byte[] newBuffer = new byte[buffer.Length * elSize];
+            Array.Copy(buffer, newBuffer, buffer.Length* elSize);
+         
+            for (int i = 0; i < buffer.Length * elSize; i++)
+            {
+                Write8(newBuffer[i]);
+            }
+
+    
+
+        }
+
         public override void Write(byte[] buffer, int offset, int count)
         {
             int oldPos = (int)Position;
