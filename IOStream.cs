@@ -21,7 +21,7 @@ namespace Video2Gba
 
         public override long Length => length;
 
-        private int Capacity
+        public int Capacity
         {
             get
             {

@@ -1,6 +1,9 @@
 /* sound.c
  * displays the sound playing capapbilities of the GBA */
 
+#define PL_MPEG_IMPLEMENTATION
+#include "pl_mpeg.h"
+#include "Alietest.h"
 #include <stdio.h>
  /*#include "background.h"
 
@@ -8,9 +11,8 @@
  #include "zelda_treasure_16K_mono.h"
  #include "zelda_secret_16K_mono.h"
  */
-
-#include "muta.h"
-
+int ticks;
+int GetTicks(){return ticks;}
  /* the display control pointer points to the gba graphics register */
 volatile unsigned long* display_control = (volatile unsigned long*)0x4000000;
 #define MODE0 0x00
@@ -119,7 +121,7 @@ typedef struct
 }VidFrame;
 
 
-
+plm_packet_t test;
 /* copy data using DMA channel 3 (normal memory transfers) */
 void memcpy16_dma(unsigned short* dest, unsigned short* source, int amount) {
 	*dma3_source = (unsigned int)source;
@@ -268,6 +270,7 @@ void play_sound(const signed char* sound, int total_samples, int sample_rate, ch
 }
 
 #define ARM __attribute__((__target__("arm")))
+#define THUMB __attribute__((__target__("thumb")))
 #define REG_IFBIOS (*(unsigned short*)(0x3007FF8))
 
 //indicates if framebufer can be used as a buffer or not.
@@ -288,7 +291,7 @@ ARM void on_vblank() {
 			/* restart the sound again when it runs out */
 			channel_a_vblanks_remaining = channel_a_total_vblanks;
 			*dma1_control = 0;
-			*dma1_source = (unsigned int)muta;
+	//		*dma1_source = (unsigned int)alie;
 			*dma1_control = DMA_DEST_FIXED | DMA_REPEAT | DMA_32 |
 				DMA_SYNC_TO_TIMER | DMA_ENABLE;
 		}
@@ -306,7 +309,7 @@ ARM void on_vblank() {
 			channel_b_vblanks_remaining--;
 		}
 
-	  if(canDmaImage)	memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
+	  //	memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
 	}
 	vblankcounter++;
 	/* restore/enable interrupts */
@@ -316,6 +319,7 @@ ARM void on_vblank() {
 
 }
 void* workArea=0x2002000;
+void* workArea2=0x2002000 + ( 240 * 160 *2) + 0x200;
 void Setup()
 {
 canDmaImage=1;
@@ -330,7 +334,7 @@ canDmaImage=1;
 	/* clear the sound control initially */
 	*sound_control = 0;
 }
-extern VidFrame theframes[];
+//extern VidFrame theframes[];
 int FrameCounter;
 char CanDraw;
 
@@ -338,7 +342,7 @@ void VBlankIntrWait()
 {
 
 	asm("swi 0x05");
-
+ticks++;
 }
 int  Lz77Uncomp(int src, int dst)
 {
@@ -438,352 +442,119 @@ void Copy(unsigned char* src, unsigned char* dst, unsigned long size)
 	for (register int c = 0; c < size;c++) *(dst++) = *(src++);
 }
 
-void UncompIPSRLE(unsigned char* src, unsigned char* dst)
-{
-	if (dst == 0)
-	{
-		Exception(0,  "DESTINATION IS 0");
-	}
-	register unsigned char* patch = src;
-	register int header = Read32(patch); patch += 4;
-	if (header != CompHeader) Exception(0,  "HEADER DOES NOT MATCH");
 
-	register int offset = Read32(patch); patch += 4;
-	register ushort size = 0;
-	register int s = 0;
-	while (offset != EndOfFile)
-	{
-		size = Read16(patch); patch += 2;
-		unsigned char* target = (unsigned char*)&dst[offset];
-		// If RLE patch.
-		if (size == 0x6969)
+
+//two buffers 
+//__attribute__((section(".iwram"), target("arm"), noinline)) 
+THUMB rgb24torgb16()
+{
+	unsigned char* src = workArea;
+	unsigned short* dst = workArea;
+
+		for(int x =0; x<240; x++)
 		{
-			size = Read16(patch); patch += 2;
-			unsigned char val = *patch; patch++;
-			Fill(target, val, size);
+			for(int y=0;y<160;y++)
+			{
+				unsigned char* srcp = src[(y*240+x)*3];//R G B format
+				char r = srcp[0];
+				char g = srcp[1];		
+				char b = srcp[2];
+				dst[(y*240+x)]= (((r >> 3) & 31) | (((g >> 3) & 31) << 5) | (((b >> 3) & 31) << 10));
+			}
 		}
-		// If normal patch.
-		else
-		{
-			Copy(patch, target, size);
-			patch += size;
-		}
-		offset = Read32(patch); patch += 4;
-	}
-}
-
-signed int GbatroidDecomp(int size, unsigned char *src, unsigned char *dst)
-{
-  signed int maxSize; // r5
-  int encodedSizeCheck; // r5
-  unsigned char *nextSrc; // r1
-  unsigned char *nextDst; // r2
-  unsigned char *dstAddr; // r6
-  signed int srccnt; // r4
-  int curVal; // r0
-  unsigned char *nextAddr; // r1
-  int compCheck; // r3
-  int i; // r3
-  int bit16Val; // r3
-  unsigned char *nextByte; // r1
-  int bit16Check; // r3
-  int j; // r3
-  int v17; // r3
- unsigned char *v18; // r1
-
-  size = size;
-  maxSize = 0;
-  if ( size )
-  {
-    if ( size != 1 )
-    {
-      *dst = *src;
-      nextSrc = src + 1;
-      nextDst = dst + 1;
-      *nextDst++ = 0;
-      *nextDst = *nextSrc;
-      src = nextSrc + 1;
-      *++nextDst = 0;
-      dst = nextDst + 1;
-    }
-  }
-  else
-  {
-    encodedSizeCheck = *src++;
-    if ( encodedSizeCheck )
-    {
-      if ( encodedSizeCheck != 1 && encodedSizeCheck != 2 )
-      {
-        maxSize = 0x2000;
-      }
-      else
-      {
-        maxSize = 0x1000;
-      }
-    }
-    else
-    {
-      maxSize = 0x800;
-    }
-  }
-  dstAddr = dst;
-  srccnt = 0;
-  do
-  {
-    curVal = *src;
-    nextAddr = src + 1;
-    if ( curVal == 1 )
-    {
-      compCheck = *nextAddr;
-      src = nextAddr + 1;
-      ++srccnt;
-      for ( ; compCheck; ++src )
-      {
-        if ( compCheck & 0x80 )
-        {
-          for ( i = compCheck & 0x7F; i; --i )
-          {
-            *dst = *src;
-            dst += 2;
-          }
-          ++src;
-        }
-        else
-        {
-          while ( compCheck )
-          {
-            *dst = *src++;
-            dst += 2;
-            --compCheck;
-          }
-        }
-        compCheck = *src;
-      }
-    }
-    else
-    {
-      bit16Val = *nextAddr;
-      nextByte = nextAddr + 1;
-      bit16Check = (bit16Val << 8) | *nextByte;
-      src = nextByte + 1;
-      ++srccnt;
-      for ( ; bit16Check; src = v18 + 1 )
-      {
-        if ( bit16Check & 0x8000 )
-        {
-          for ( j = bit16Check & 0x7FFF; j; --j )
-          {
-            *dst = *src;
-            dst += 2;
-          }
-          ++src;
-        }
-        else
-        {
-          while ( bit16Check )
-          {
-            *dst = *src++;
-            dst += 2;
-            --bit16Check;
-          }
-        }
-        v17 = *src;
-        v18 = src + 1;
-        bit16Check = (v17 << 8) | *v18;
-      }
-    }
-    dst = dstAddr + 1;
-  }
-  while ( srccnt <= 1 );
-  return maxSize;
-}
-typedef struct { unsigned long cmpsize[4]; unsigned long decmpsize[4]; unsigned char* pnt; } help;
-
-typedef struct { unsigned long cmpsize[4];  unsigned char* pnt; } help2;
-
-void FrameCompareCompQuad(unsigned char* src, unsigned char* dst)
-{
-	unsigned char* tgt = dst;
-	//src will point to size table, then serialized array
-	int compBufferIndex = 0;//pointer inside buffer
-
-	help* k = (src);
-
-	unsigned char* compBufferStart = &k->pnt;
-
-	for (int i = 0;i < 4;i++) 
-    {
-		UncompIPSRLE(compBufferStart, tgt);
-		compBufferStart += k->cmpsize[i];
-		tgt += k->decmpsize[i];
-	}
-}
-
-void FrameCompareCompQuadnintyo(unsigned char* src, unsigned char* dst)
-{
-	unsigned char* tgt = dst;
-	//src will point to size table, then serialized array
-	int compBufferIndex = 0;//pointer inside buffer
-
-	help2* k = (src);
-
-	unsigned char* compBufferStart = &k->pnt;
-
-	for (int i = 0;i < 4;i++) 
-    {
-		int sz = RLUncomp(compBufferStart, tgt);
-		compBufferStart += k->cmpsize[i];
-		tgt += sz;
-	}
-}
-void ApplyDifferences(unsigned char* src, unsigned char* dst)
-{
-   unsigned char* p = src;
-   int count=*p;p+=4;
-   int* offsets = *p; p+=4*count; 
-   unsigned char* data = p;
-   for(int i=0;i<count;i++)
-   {
-        int byteCount = *(unsigned long*)data; data+=4;
-//(unsigned char*  src, unsigned char*  dst, int size, char fill, char isu32)
-        CpuSet(data, dst[offsets[i]], byteCount,0,0);
-
-   }
-
-
-  
-
-}
-
-
-void FrameCompare(unsigned char* src, unsigned char* dst)
-{
-	unsigned char* tgt = dst;
-unsigned char* patch = src;
-	//src will point to size table, then serialized array
-	int compBufferIndex = 0;//pointer inside buffer
-
-//	help2* k = (src);2
-
+		
+				
+		
 	
-    unsigned short arrayCount = *(unsigned short*)patch; patch+=2;
-    unsigned char* compressTable = (unsigned char*)patch;patch+=1*arrayCount;
-    unsigned long* compressSizes=(unsigned long*)patch; patch+=4*arrayCount;
-unsigned char* compBufferStart=patch;
-	for (int i = 0;i < arrayCount;i++) 
-    {
-		int diffOffset=compBufferStart;
-		int sz=0;
-        switch(compressTable[i])
-        {
-         
-         case 1:
-			diffOffset=workArea;
-           sz=Lz77Uncomp(compBufferStart, diffOffset);
-                 break;
-         case 2:
-			diffOffset=workArea;
-			sz = RLUncomp(compBufferStart, diffOffset);		
-                 break;
-        }      
-
-
-
-        ApplyDifferences(diffOffset, tgt);
 	
-		compBufferStart += compressSizes[i];
-		tgt += sz;
-	}
 }
 
-const uint NINTYRLHEADER = 0x88FFFF75;
-CompFrame* HandleCompression(CompFrame* result)
-{
-	int compheader; // r2
-	int size; // r2
-	int dst = 0x2002000;//0x6000000;
-	compheader = result->headervalue;
-	//Copies a raw frame
-	if (compheader == RAWHEADER)
-	{
-		size = result->size;
-		/*   dword_40000D4 = &result->source;
-		   dword_40000D8 = dst;
-		   dword_40000DC = size | 0x80000000;*/
-		*dma3_source = (unsigned int)&result->source;
-		*dma3_destination = (unsigned int)dst;
-		*dma3_control = DMA_ENABLE | DMA_16 | size;
+//__attribute__((section(".iwram"), target("arm"), noinline))  
+THUMB void app_on_video(plm_t *mpeg, plm_frame_t *frame) {
 
-	}
-	else if (compheader == LZCOMPRESSEDHEADER)//Decompresses LZ from src lz to decomp dst
-	{
-		Lz77Uncomp(&result->source, dst);
-		canDmaImage=1;
-	}
-	else if (compheader == DIFFHEADER)//Applies differences from a src frame and a target frame for minimal compression
-	{
-		UncompIPSRLE(&result->source, dst);
-	}
-	else if (compheader == QUADDIFFHEADER) //4 pointers, RLE IPS compressed. 
-	{
-		FrameCompareCompQuad(&result->source, dst);
-	}
-	else if (compheader == QUADDIFFHEADER2)//4 pointers, Decompress to specific areas of sceen, LT, RT, LB, RB
-	{
-		Exception(QUADDIFFHEADER2, "Not Supported");
-	}
-	else if (compheader == RLEHEADER)
-	{
-		Exception(RLEHEADER, "Not Supported");
-	}
-    else if(compheader == NINTYRLHEADER)
-	{
-        // FrameCompareCompQuadninty(&result->source, dst);
-         
-	}
-    else if(compheader == NINTYRLHEADERINTR)
-	{
-         FrameCompare(&result->source, dst); 
-		 canDmaImage=0;        
-	}
-
-
-
-
-	return result;
+		int stride =  frame->width * 3;
+		plm_frame_to_rgb(frame, workArea, stride);
+		while(1);
+		//rgb24torgb16();//a0
+		VBlankIntrWait();
+		CanDraw=1;
+	
 }
-extern const int FrameCount;
-extern const int FPS;
+const int FrameCount;
+const int FPS;
+plm_t *plm;
 
 int main() {
+	char wants_to_quit = 0;
+		double last_time=0;
+	ticks=0;
+	//plm_set_audio_enabled(FALSE);
+		// Initialize plmpeg, load the video file, install decode callbacks
+	plm = plm_create_with_memory((uint8_t *)ALIEtest, ALIEtest_size, 0);
+	
+	int b=	plm_get_framerate(plm);
+	int k= 0xDEAD1;
+	int c=	plm_get_samplerate(plm);
+	 k= 0xDEAD2;
+	int d=	plm_get_duration(plm);
+	 k= 0xDEAD3;
+	if (!plm) {
+		*(unsigned long*)0x3000000 = 0xFFDDEE22;
+		while(1);
+	}
 	//set up screen
 	(*(unsigned short*)0x4000000) = 0x403;
 	Setup();
+    *(unsigned long*)0x6000000 = 0xFFAA;
 	//Start "naturally"
 	FrameCounter = FrameCount;
 	//fps
 	int delay = Div(60, FPS);
+plm_set_video_decode_callback(plm, app_on_video, NULL);
 
-	while (1)
+	
+	plm_set_loop(plm, TRUE);
+	while (!wants_to_quit)
 	{
+		double seek_to = -1;
 		if (vblankcounter % delay == 0) {
 			CanDraw = 1;
 		}
 		if (FrameCounter >= FrameCount)
 		{
 			FrameCounter = 0;
-			play_sound(muta, muta_size, 10512, 'A');
+			
 		}
+	// Compute the delta time since the last app_update(), limit max step to 
+	// 1/30th of a second
+	double current_time = (double)GetTicks()/1000;
+	double elapsed_time = current_time - last_time;
+	if (elapsed_time > 1.0 / 10.0) {
+		elapsed_time = 1.0 / 10.0;
+	}
+	last_time = current_time;
 
+	// Seek or advance decode
+	if (seek_to != -1) {
+	//	SDL_ClearQueuedAudio(self->audio_device);
+		plm_seek(plm, seek_to, FALSE);
+	}
+	else {
+		plm_decode(plm, elapsed_time);
+	}
+
+	if (plm_has_ended(plm)) {
+		wants_to_quit = 1;
+	}
 		if (CanDraw) {
 
-			VidFrame* frameInfo = &theframes[FrameCounter++];
-			int v1 = frameInfo->size;
-			HandleCompression(frameInfo->address);
+		//	*(unsigned long*)0x3000000 = 0xFFDDEE33;
+		//while(1);
 			CanDraw = 0;
 		}
 
 		VBlankIntrWait();
+		
 	}
 	return 0;
 }

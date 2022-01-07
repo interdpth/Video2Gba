@@ -10,7 +10,7 @@ using Video2Gba.LibIpsNet;
 
 namespace Video2Gba
 {
-   public static class FrameOps
+    public static class FrameOps
     {
 
         public static byte[] RawFrame(byte[] frame)
@@ -25,25 +25,67 @@ namespace Video2Gba
         }
 
 
-
-        public static byte[] DiffFrame(byte[] frame, byte[] newf)
+        public static byte[] DiffFrame2(byte[] oldframe, byte[] newframe)
         {
 
-
-
-            short[] oldframe = new short[frame.Length / 2];
-            short[] newframe = new short[frame.Length / 2];
-
-            Array.Copy(frame, oldframe, frame.Length/2);
-
-            Array.Copy(newf, newframe, frame.Length/2);
 
             IOStream stream = new IOStream(8);
 
 
             BitConverter.GetBytes(0x88FFFF22).CopyTo(stream.Data, 0);
+            stream.Position = 4;
+            for (int i = 0; i < oldframe.Length; i++)
+            {
+                //if it's more than a pixel we copy. 
 
-            for(int i = 0; i < oldframe.Length;i++)
+                byte src = oldframe[i];
+                byte cmp = newframe[i];
+
+
+                if (src != cmp)
+                {
+                    if (i + 1 == oldframe.Length - 1) break; // WE finish up.
+                    int copyCounter = i;
+                    List<byte> diffs = new List<byte>();
+                    for (; copyCounter < oldframe.Length; copyCounter++)
+                    {
+                        src = oldframe[copyCounter];
+                        cmp = newframe[copyCounter];
+                        if (src == cmp)
+                        {
+                            //we done.
+                            break;
+                        }
+                        diffs.Add(cmp);
+                    }
+
+                    stream.Write32(i);
+                    int size = copyCounter - i;
+                    stream.Write32(size);
+                    stream.WriteData(diffs.ToArray(), 1, diffs.Count);
+                    i += copyCounter-i;//Difference
+                }
+            }
+
+
+            return stream.Data;
+        }
+
+        public static byte[] DiffFrame(byte[] frame, byte[] newf)
+        {
+            short[] oldframe = new short[frame.Length / 2];
+            short[] newframe = new short[frame.Length / 2];
+
+            Array.Copy(frame, oldframe, frame.Length / 2);
+
+            Array.Copy(newf, newframe, frame.Length / 2);
+
+            IOStream stream = new IOStream(8);
+
+
+            BitConverter.GetBytes(0x88FFFF23).CopyTo(stream.Data, 0);
+
+            for (int i = 0; i < oldframe.Length; i++)
             {
                 //if it's more than a pixel we copy. 
 
@@ -51,37 +93,50 @@ namespace Video2Gba
                 int cmp = newframe[i];
 
 
-                if(src!=cmp)
+                if (src != cmp)
                 {
                     if (i + 1 == oldframe.Length - 1) break; // WE finish up.
                     int copyCounter = i;
-                    for(;copyCounter < oldframe.Length; copyCounter++)
+                    for (; copyCounter < oldframe.Length; copyCounter++)
                     {
-                       src = oldframe[copyCounter];
-                       cmp = newframe[copyCounter];
-                        if(src == cmp)
+                        src = oldframe[copyCounter];
+                        cmp = newframe[copyCounter];
+                        if (src == cmp)
                         {
                             //we done.
                             break;
                         }
                     }
-                  
+
                     stream.Write32(i);
                     int size = copyCounter - i;
                     stream.Write32(size);
                     //Array time
                     foreach (ushort a in newframe.ToList().GetRange(i, size).ToArray())
-                    { 
+                    {
                         stream.Write16(a);
                     }
-                  
+                    i += copyCounter;
                 }
-            
+
 
             }
 
 
             return stream.Data;
+        }
+
+        public static byte[] LzCompress2(byte[] frame)
+        {
+            IOStream src = new IOStream(frame);
+            IOStream output = VideoCompression.CompLZ77(src, frame.Length);
+
+            byte[] returnvalue = new byte[8 + output.Length];
+            BitConverter.GetBytes(CompressionHeaders.LZCOMPRESSEDHEADER).CopyTo(returnvalue, 0);
+            BitConverter.GetBytes(frame.Length).CopyTo(returnvalue, 4);
+            output.CopyToArray(0, returnvalue, 8, (int)output.Length);
+
+            return returnvalue;
         }
 
         public static byte[] LzCompress(byte[] frame)
@@ -385,7 +440,7 @@ namespace Video2Gba
             {
                 return buffer;
             }
-       
+
             //Split the arrays up.
 
             List<byte[]> newBuffers = BufferHelper.Buffer2QuadStraight(buffer);
@@ -438,17 +493,17 @@ namespace Video2Gba
             IOStream offstream = new IOStream();
             IOStream datastream = new IOStream();
             List<int> offsetTable = new List<int>();
-            for(int i = 0; i<newArr.Length;i++)
+            for (int i = 0; i < newArr.Length; i++)
             {
                 byte s = src[i];
                 byte n = newArr[i];
-                if(s!=n)
+                if (s != n)
                 {
                     //WE HAVE A CHANGE.
-                   // io.Write32(i);
+                    // io.Write32(i);
                     offsetTable.Add(i);
-                        IOStream writeStr = new IOStream();
-                    while(s!=n && i+1 < newArr.Length)
+                    IOStream writeStr = new IOStream();
+                    while (s != n && i + 1 < newArr.Length)
                     {
                         writeStr.Write8(n);
                         i++;
@@ -464,13 +519,13 @@ namespace Video2Gba
                     //}
                     //else
                     //{
-                        datastream.CopyFromArray(writeStr.Data, (Int32)writeStr.Length);
+                    datastream.CopyFromArray(writeStr.Data, (Int32)writeStr.Length);
                     //}
-                    
+
 
                 }
 
-                io.CopyFromArray(offstream.Data, (int) offstream.Length);
+                io.CopyFromArray(offstream.Data, (int)offstream.Length);
                 io.CopyFromArray(datastream.Data, (int)datastream.Length);
             }
 
@@ -517,7 +572,7 @@ namespace Video2Gba
         //        src.Write8((byte)compressionType);         
         //    }
 
- 
+
 
         //    foreach (var s in newBuffers) src.WriteU32((uint)s.Length);
         //    foreach (var s in newBuffers) src.CopyFromArray(s, s.Length);
@@ -527,6 +582,20 @@ namespace Video2Gba
         //    return returnValue;
         //}
 
+
+        private static List<byte> bigBuffer = new List<byte>();
+
+        public static void CompressFile3(ref byte[] buffer, string fn, string output, int enableCircleComp = 3)
+        {
+            Console.WriteLine("Compressing to " + fn);
+
+            ROM.MakeSource(fn, Compress2(buffer), output);
+
+            VideoCompression.oldFrame = buffer;
+
+
+
+        }
 
         public static void CompressFile2(ref byte[] buffer, string fn, string output, int enableCircleComp = 3)
         {
@@ -677,6 +746,170 @@ namespace Video2Gba
         public static byte[] Compress(byte[] buffer, int enableCircleComp = 3)
         {
 
+            byte[] bestData = null; ///RawFrame(buffer);
+
+            //See who has best data. 
+            int bestSize = int.MaxValue;// bestData.Length;//raw 
+
+            //   byte[] lz = LzCompress(buffer);
+            //   // byte[] diff = FrameCompare(buffer);
+            //   ////  byte[] difflz = FrameCompareCompQuad(buffer);
+
+
+            //   //byte[] nint2 = FrameCompareCompQuadNinty2(buffer);
+            //   //byte[] nint3 = FrameCompareCompQuadNinty3(buffer);
+            //   //byte[] nint4 = FrameCompareCompQuadNinty4(buffer);
+
+            //   //byte[] RlEd = VideoCompression.GBatroidRLE(buffer);
+
+
+            //   //byte[] nint5 = LzCompress(nint4);
+
+            //   //byte[] RlEd2 = LzCompress(RlEd);
+            byte[] diff = null;
+            Thread diffThread = null;
+            byte[] cmp = null;
+       
+                //dif should work nearly all the time.
+                Thread t = new Thread(()=>{
+                    if (VideoCompression.oldFrame != null)
+                    {
+                        diff = DiffFrame2(VideoCompression.oldFrame, buffer);
+                    }
+                });
+                    Thread t2 = new Thread(()=>{
+                        cmp = LzCompress(buffer);
+                    });
+                t.Start();
+                t2.Start();
+                Console.WriteLine("Waiting for threads to complete");
+                while (t2.IsAlive || t2.ThreadState == ThreadState.Running  || t.IsAlive && t.ThreadState == ThreadState.Running)
+                {
+                    
+                    Thread.Sleep(20);
+                }
+                Console.WriteLine("Threads completed.");
+            
+            //diffThread2?.Start();
+            ////   diffThread?.Start();
+            //lzThread.Start();
+
+            ////   diffThread?.Join();
+
+            //Thread.Sleep(100);
+            //while ((lzThread != null && lzThread.IsAlive || lzThread.ThreadState == ThreadState.Running) || (diffThread != null && diffThread.IsAlive && diffThread.ThreadState == ThreadState.Running))
+            //{
+            //    Thread.Sleep(20);
+            //}
+
+            //   if (diff != null && diff.Length != 0 && diff.Length < bestSize)
+            //   {
+            //       bestSize = diff.Length;
+            //       bestData = diff;
+            //   }
+
+
+            if (diff != null && diff.Length != 0 && diff.Length < bestSize)
+            {
+                bestSize = diff.Length;
+                bestData = diff;
+            }
+
+
+            if (cmp != null && cmp.Length < bestSize)
+            {
+                bestSize = cmp.Length;
+                bestData = cmp;
+            }
+            //if (nint2.Length < bestSize)
+            //{
+            //    bestSize = nint2.Length;
+            //    bestData = nint2;
+            //}
+            //if (nint3.Length < bestSize)
+            //{
+            //    bestSize = nint3.Length;
+            //    bestData = nint3;
+            //}
+            //if (diff.Length < bestSize)
+            //{
+            //    bestSize = diff.Length;
+            //    bestData = diff;
+            //}
+            //if (RlEd.Length < bestSize)
+            //{
+            //    bestSize = RlEd.Length;
+            //    bestData = RlEd;
+            //}
+            //if (nint4.Length < bestSize)
+            //{
+            //    bestSize = nint4.Length;
+            //    bestData = nint4;
+            //}
+
+
+            //if (RlEd2.Length < bestSize)
+            //{
+            //    bestSize = RlEd2.Length;
+            //    bestData = RlEd2;
+            //}
+            //if (nint5.Length < bestSize)
+            //{
+            //    bestSize = nint5.Length;
+            //    bestData = nint5;
+            //}
+
+            //if (diff.Length < bestSize)
+            //{
+            //    bestSize = diff.Length;
+            //    bestData = diff;
+            //}
+
+
+            //if (difflz.Length < bestSize)
+            //{
+            //    bestSize = difflz.Length;
+            //    bestData = difflz;
+            //}
+
+            //if (difflz2.Length < bestSize)
+            //{
+            //    bestSize = difflz2.Length;
+            //    bestData = difflz2;
+            //}
+
+            //if (interleave.Length < bestSize)
+            //{
+            //    bestSize = interleave.Length;
+            //    bestData = interleave;
+            //}
+            //if (interleave2.Length < bestSize)
+            //{
+            //    bestSize = interleave2.Length;
+            //    bestData = interleave2;
+            //}
+            //if (RlEd.Length < bestSize)
+            //{
+            //    bestSize = RlEd.Length;
+            //    bestData = RlEd;
+            //}
+
+
+            byte[] file = new byte[bestSize + 4];
+
+
+            BitConverter.GetBytes(bestSize).CopyTo(file, 0);
+
+
+            bestData.CopyTo(file, 4);
+
+            return file;
+
+
+        }
+        public static byte[] Compress2(byte[] buffer, int enableCircleComp = 3)
+        {
+
             byte[] bestData = RawFrame(buffer);
 
             //See who has best data. 
@@ -710,18 +943,18 @@ namespace Video2Gba
             //     });
             //   }
 
-            //   byte[] diff2 = null;
-            //   Thread diffThread2 = null;
-            //   if (VideoCompression.oldFrame != null)
-            //   {
+            byte[] diff2 = null;
+            Thread diffThread2 = null;
+            if (VideoCompression.oldFrame != null)
+            {
 
-            //       diffThread2 = new Thread(
-            //     () =>
-            //     {
-            //         diff2 = DiffFrame(VideoCompression.oldFrame,buffer );
+                diffThread2 = new Thread(
+              () =>
+              {
+                  diff2 = DiffFrame(VideoCompression.oldFrame, buffer);
 
-            //     });
-            //   }
+              });
+            }
 
 
 
@@ -733,23 +966,18 @@ namespace Video2Gba
                     cmp = LzCompress(buffer);
 
                 });
-            //   diffThread2?.Start();
+            diffThread2?.Start();
             //   diffThread?.Start();
             lzThread.Start();
 
-          lzThread.Join();
+            lzThread.Join();
             //   diffThread?.Join();
-            //   diffThread2?.Join();
-              Thread.Sleep(100);
+            diffThread2?.Join();
+            Thread.Sleep(100);
             while ((lzThread != null && lzThread.IsAlive || lzThread.ThreadState == ThreadState.Running)) //|| (diffThread != null && diffThread.IsAlive && diffThread.ThreadState == ThreadState.Running))
             {
                 Thread.Sleep(20);
             }
-            //   if (diff2 != null && diff2.Length != 0 && diff2.Length < bestSize)
-            //   {
-            //       bestSize = diff2.Length;
-            //       bestData = diff2;
-            //   }
             //   if (diff != null && diff.Length != 0 && diff.Length < bestSize)
             //   {
             //       bestSize = diff.Length;
@@ -759,6 +987,11 @@ namespace Video2Gba
             {
                 bestSize = cmp.Length;
                 bestData = cmp;
+            }
+            if (diff2 != null && diff2.Length != 0 && diff2.Length < bestSize)
+            {
+                bestSize = diff2.Length;
+                bestData = diff2;
             }
             //if (nint2.Length < bestSize)
             //{

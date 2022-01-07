@@ -1,6 +1,9 @@
 /* sound.c
  * displays the sound playing capapbilities of the GBA */
 
+#define PL_MPEG_IMPLEMENTATION
+#include "pl_mpeg.h"
+#include "Alietest.h"
 #include <stdio.h>
  /*#include "background.h"
 
@@ -8,10 +11,9 @@
  #include "zelda_treasure_16K_mono.h"
  #include "zelda_secret_16K_mono.h"
  */
-
-#include "lztown.h"
-
- /* the display control pointer points to the gba graphics register */
+int ticks;
+int GetTicks() { return ticks; }
+/* the display control pointer points to the gba graphics register */
 volatile unsigned long* display_control = (volatile unsigned long*)0x4000000;
 #define MODE0 0x00
 #define BG0_ENABLE 0x100
@@ -102,7 +104,7 @@ const uint DIFFHEADER = 0x88FFFF12;
 const uint QUADDIFFHEADER = 0x88FFFF13;
 const uint QUADDIFFHEADER2 = 0x88FFFF14;
 const uint RLEHEADER = 0x88FFFF15;
-
+const uint NINTYRLHEADERINTR = 0x88FFFF76;
 typedef struct
 {
 	unsigned long thesize;
@@ -119,7 +121,7 @@ typedef struct
 }VidFrame;
 
 
-
+plm_packet_t test;
 /* copy data using DMA channel 3 (normal memory transfers) */
 void memcpy16_dma(unsigned short* dest, unsigned short* source, int amount) {
 	*dma3_source = (unsigned int)source;
@@ -268,8 +270,11 @@ void play_sound(const signed char* sound, int total_samples, int sample_rate, ch
 }
 
 #define ARM __attribute__((__target__("arm")))
+#define THUMB __attribute__((__target__("thumb")))
 #define REG_IFBIOS (*(unsigned short*)(0x3007FF8))
 
+//indicates if framebufer can be used as a buffer or not.
+int canDmaImage;
 int vblankcounter = 0;
 /* this function is called each vblank to get the timing of sounds right */
 ARM void on_vblank() {
@@ -286,7 +291,7 @@ ARM void on_vblank() {
 			/* restart the sound again when it runs out */
 			channel_a_vblanks_remaining = channel_a_total_vblanks;
 			*dma1_control = 0;
-			*dma1_source = (unsigned int)lztown;
+			//		*dma1_source = (unsigned int)alie;
 			*dma1_control = DMA_DEST_FIXED | DMA_REPEAT | DMA_32 |
 				DMA_SYNC_TO_TIMER | DMA_ENABLE;
 		}
@@ -304,7 +309,7 @@ ARM void on_vblank() {
 			channel_b_vblanks_remaining--;
 		}
 
-		memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
+		//	memcpy16_dma(0x6000000, 0x2002000, 240 * 160);
 	}
 	vblankcounter++;
 	/* restore/enable interrupts */
@@ -313,9 +318,13 @@ ARM void on_vblank() {
 	*interrupt_enable = 1;
 
 }
-
+void* workArea = 0x2002000;
+void* workArea2 = 0x2002000 + (240 * 160 * 2) + 0x200;
 void Setup()
 {
+	//set up screen
+	(*(unsigned short*)0x4000000) = 0x403;
+	canDmaImage = 1;
 	/* create custom interrupt handler for vblank - whole point is to turn off sound at right time
 	   * we disable interrupts while changing them, to avoid breaking things */
 	*interrupt_enable = 0;
@@ -327,7 +336,7 @@ void Setup()
 	/* clear the sound control initially */
 	*sound_control = 0;
 }
-extern VidFrame theframes[];
+//extern VidFrame theframes[];
 int FrameCounter;
 char CanDraw;
 
@@ -335,34 +344,36 @@ void VBlankIntrWait()
 {
 
 	asm("swi 0x05");
-
+	ticks++;
 }
 int  Lz77Uncomp(int src, int dst)
 {
 	asm("swi 0x12"); ;
 }
-
-//set bit 24 on size for word fill
-//size should be divided by 4 berfore calling
-int CpuFastSet(int src, int dst, int size)
+int  RLUncomp(int src, int dst)
 {
-	asm("swi 0xC"); ;
+	asm("swi 0x14"); ;
+}
+/*
+The length must be a multiple of 4 bytes (32bit mode) or 2 bytes (16bit mode). The (half)wordcount in r2 must be length/4 (32bit mode) or length/2 (16bit mode), ie. length in word/halfword units rather than byte units.
+
+  r0    Source address        (must be aligned by 4 for 32bit, by 2 for 16bit)
+  r1    Destination address   (must be aligned by 4 for 32bit, by 2 for 16bit)
+  r2    Length/Mode
+		  Bit 0-20  Wordcount (for 32bit), or Halfwordcount (for 16bit)
+		  Bit 24    Fixed Source Address (0=Copy, 1=Fill by {HALF}WORD[r0])
+		  Bit 26    Datasize (0=16bit, 1=32bit)
+
+*/
+int _CpuSet(int  src, int  dst, int size)
+{
+	asm("swi 0xb"); ;
 }
 
-int FillByCharCpu(unsigned char val, int dst, int size)
-{
-	int test = 0;
-	//make a word from our val lol
-	int* hey = &test;
-	hey[0] = val;
-	hey[1] = val;
-	hey[2] = val;
-	hey[3] = val;
-	CpuFastSet(hey, dst, size / 4 | (1 << 24));
-}
+
 void Exception(int errorcode, char* msg)
 {
-
+	_CpuSet(msg, 0x3000000, 128);
 	while (1);
 
 }
@@ -379,181 +390,172 @@ unsigned long Read32(unsigned char* src)
 }
 
 
-
+//pls implement cpuset as cpufastset requires divisible by 32
 const int EndOfFile = 0x00464F45;
 const int EndOfFile2 = 0x00454F46;
 const int CompHeader = 0x504d4f43;
+//Calls cpuset using appropriate flags.
+int CpuSet(unsigned char* src, unsigned char* dst, int size, char fill, char isu32)
+{
+	int fillFlag = (fill & 1) << 24;
+	int u32Flag = (isu32 & 1) << 26;
+	int maxLen = (1 << 20);
+	for (int s = 0; s < size - 1;)
+	{
+		int CopySize = size > maxLen ? size - maxLen : size;
+		s += CopySize;
+		_CpuSet(src, dst, (CopySize / (2 + isu32 * 2)) | fillFlag | u32Flag);
+	}
+}
+
+
+int FillByCharCpu(unsigned char val, int* dst, int size)
+{
+	int test = 0;
+	//make a word from our val lol
+	ushort hey[2] = { val, val };
+
+	CpuSet(&hey, dst, size, 1, 0);
+}
+
 void Fill(unsigned char* ptr, unsigned char val, unsigned long size)
 {
-	if (size % 8 == 0)
+	if (size > 8)
 	{
 		FillByCharCpu(val, ptr, size);
 		return;
 	}
-	for (int c = 0; c < size;c++)*(ptr++) = val;
+	for (register int c = 0; c < size; c++) *(ptr++) = val;
 }
 
 void Copy(unsigned char* src, unsigned char* dst, unsigned long size)
 {
-	if (size % 8 == 0)
+	if (size > 8)
 	{
-		CpuFastSet(src, dst, size / 4);
+		if (size % 4 == 0)
+		{
+			CpuSet(src, dst, size, 0, 1);
+			return;
+		}
+		CpuSet(src, dst, size, 0, 0);
 		return;
 	}
 
-	for (int c = 0; c < size;c++) *(dst++) = *(src++);
+	for (register int c = 0; c < size; c++) *(dst++) = *(src++);
 }
 
-void UncompIPSRLE(unsigned char* src, unsigned char* dst)
-{
-	if (dst == 0)
-	{
-		while (1);
-	}
-	register unsigned char* patch = src;
-	register int header = Read32(patch); patch += 4;
-	if (header != CompHeader) while (1);
 
-	register int offset = Read32(patch); patch += 4;
-	register ushort size = 0;
-	register int s = 0;
-	while (offset != EndOfFile)
+
+//two buffers 
+//__attribute__((section(".iwram"), target("arm"), noinline)) 
+THUMB rgb24torgb16()
+{
+	unsigned char* src = workArea;
+	unsigned short* dst = workArea;
+
+	for (int x = 0; x < 240; x++)
 	{
-		size = Read16(patch); patch += 2;
-		unsigned char* target = dst[offset];
-		// If RLE patch.
-		if (size == 0x6969)
+		for (int y = 0; y < 160; y++)
 		{
-			size = Read16(patch); patch += 2;
-			unsigned char val = *patch; patch++;
-			Fill(target, val, size);
+			unsigned char* srcp = src[(y * 240 + x) * 3];//R G B format
+			char r = srcp[0];
+			char g = srcp[1];
+			char b = srcp[2];
+			dst[(y * 240 + x)] = (((r >> 3) & 31) | (((g >> 3) & 31) << 5) | (((b >> 3) & 31) << 10));
 		}
-		// If normal patch.
-		else
-		{
-			Copy(patch, target, size);
-			patch += size;
-		}
-		offset = Read32(patch); patch += 4;
 	}
-}
-
-
-typedef struct { unsigned long cmpsize[4]; unsigned long decmpsize[4]; unsigned char* pnt; } help;
 
 
 
-void FrameCompareCompQuad(unsigned char* src, unsigned char* dst)
-{
-	unsigned char* tgt = dst;
-	//src will point to size table, then serialized array
-	int compBufferIndex = 0;//pointer inside buffer
 
-	help* k = (src);
-	/*unsigned long* sizes = src+4;
-	unsigned long* decompsizes = sizes + 16;//4*4
-
-
-	unsigned char* compBufferStart = (unsigned char*)(decompsizes + 16);//4*4
-
-
-	for (int i = 0;i < 4;i++) {
-		UncompIPSRLE(compBufferStart, tgt);
-		compBufferStart += sizes[i];
-		tgt += decompsizes[i];
-	}
-*/
-
-
-	unsigned char* compBufferStart = &k->pnt;
-
-
-	for (int i = 0;i < 4;i++) {
-
-
-
-		UncompIPSRLE(compBufferStart, tgt);
-		compBufferStart += k->cmpsize[i];
-		tgt += k->decmpsize[i];
-	}
 
 }
 
+//__attribute__((section(".iwram"), target("arm"), noinline))  
+THUMB void app_on_video(plm_t* mpeg, plm_frame_t* frame) {
 
-CompFrame* HandleCompression(CompFrame* result)
-{
-	int compheader; // r2
-	int size; // r2
-	int dst = 0x2002000;//0x6000000;
-	compheader = result->headervalue;
-	//Copies a raw frame
-	if (compheader == RAWHEADER)
-	{
-		size = result->size;
-		/*   dword_40000D4 = &result->source;
-		   dword_40000D8 = dst;
-		   dword_40000DC = size | 0x80000000;*/
-		*dma3_source = (unsigned int)&result->source;
-		*dma3_destination = (unsigned int)dst;
-		*dma3_control = DMA_ENABLE | DMA_16 | size;
+	int stride = frame->width * 3;
+	plm_frame_to_rgb(frame, workArea, stride);
+	while (1);
+	//rgb24torgb16();//a0
+	VBlankIntrWait();
+	CanDraw = 1;
 
-	}
-	else if (compheader == LZCOMPRESSEDHEADER)//Decompresses LZ from src lz to decomp dst
-	{
-		Lz77Uncomp(&result->source, dst);
-	}
-	else if (compheader == DIFFHEADER)//Applies differences from a src frame and a target frame for minimal compression
-	{
-		UncompIPSRLE(&result->source, dst);
-	}
-	else if (compheader == QUADDIFFHEADER) //4 pointers, RLE IPS compressed. 
-	{
-		FrameCompareCompQuad(&result->source, dst);
-	}
-	else if (compheader == QUADDIFFHEADER2)//4 pointers, Decompress to specific areas of sceen, LT, RT, LB, RB
-	{
-		Exception(QUADDIFFHEADER2, "Not Supported");
-	}
-	else if (compheader == RLEHEADER)
-	{
-		Exception(RLEHEADER, "Not Supported");
-	}
-
-
-	return result;
 }
-extern const int FrameCount;
-extern const int FPS;
+const int FrameCount;
+const int FPS;
+plm_t* plm;
 
 int main() {
-	//set up screen
-	(*(unsigned short*)0x4000000) = 0x403;
+	char wants_to_quit = 0;
+	double last_time = 0;
+	ticks = 0;
+	//plm_set_audio_enabled(FALSE);
+		// Initialize plmpeg, load the video file, install decode callbacks
+	plm = plm_create_with_memory((uint8_t*)ALIEtest, ALIEtest_size, 0);
+
+	int b = plm_get_framerate(plm);//0x17
+	int k = 0xDEAD1;
+	int c = plm_get_samplerate(plm);//0
+	k = 0xDEAD2;
+	int d = plm_get_duration(plm);//c5
+	k = 0xDEAD3;
+	if (!plm) {
+		*(unsigned long*)0x3000000 = 0xFFDDEE22;
+		while (1);
+	}
+
 	Setup();
+	*(unsigned long*)0x6000000 = 0xFFAA;
 	//Start "naturally"
 	FrameCounter = FrameCount;
 	//fps
 	int delay = Div(60, FPS);
+	plm_set_video_decode_callback(plm, app_on_video, NULL);
 
-	while (1)
+
+	plm_set_loop(plm, TRUE);
+	while (!wants_to_quit)
 	{
+		double seek_to = -1;
 		if (vblankcounter % delay == 0) {
 			CanDraw = 1;
 		}
 		if (FrameCounter >= FrameCount)
 		{
 			FrameCounter = 0;
-			play_sound(lztown, lztown_size, 10512, 'A');
+
+		}
+		// Compute the delta time since the last app_update(), limit max step to 
+		// 1/30th of a second
+		double current_time = (double)GetTicks() / 1000;
+		double elapsed_time = current_time - last_time;
+		if (elapsed_time > 1.0 / 10.0) {
+			elapsed_time = 1.0 / 10.0;
+		}
+		last_time = current_time;
+
+		// Seek or advance decode
+		if (seek_to != -1) {
+			//	SDL_ClearQueuedAudio(self->audio_device);
+			plm_seek(plm, seek_to, FALSE);
+		}
+		else {
+			plm_decode(plm, elapsed_time);
 		}
 
+		if (plm_has_ended(plm)) {
+			wants_to_quit = 1;
+		}
 		if (CanDraw) {
 
-			VidFrame* frameInfo = &theframes[FrameCounter++];
-			int v1 = frameInfo->size;
-			HandleCompression(frameInfo->address);
+			//	*(unsigned long*)0x3000000 = 0xFFDDEE33;
+			//while(1);
 			CanDraw = 0;
 		}
 
 		VBlankIntrWait();
+
 	}
 	return 0;
 }

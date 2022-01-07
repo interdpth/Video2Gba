@@ -29,7 +29,7 @@ namespace Video2Gba
             ROM.headerLines.Add(comment);
 
 
-            ROM.sourceLines.Add($"char* ArrayName_{ArrayName} = \"{ArrayName}\";\n");//so we know what file we're actually fucking with.
+            //ROM.sourceLines.Add($"char* ArrayName_{ArrayName} = \"{ArrayName}\";\n");//so we know what file we're actually fucking with.
 
             ROM.sourceLines.Add($"const unsigned char {ArrayName}[] = {{\n\t");
             string thislIne = "";

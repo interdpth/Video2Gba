@@ -228,6 +228,114 @@ namespace Video2Gba
             io.CopyFromArray(input, input.Length);
             return CompLZ77(io, (int)input.Length);
         }
+        public static IOStream CompLZ772(IOStream input, int length)
+        {
+            IOStream output = new IOStream(4);
+            byte[] data;
+            data = input.Data;
+            Dictionary<int, List<int>> bufferWindow;
+            bufferWindow = new Dictionary<int, List<int>>();
+            for (int i = 0; i < input.Length - 2; i++)
+            {
+                int key;
+                key = (data[i] | (data[i + 1] << 8) | (data[i + 2] << 16));
+                List<int> value;
+                if (bufferWindow.TryGetValue(key, out value))
+                {
+                    value.Add(i);
+                }
+                else
+                {
+                    bufferWindow.Add(key, new List<int>
+                    {
+                        i
+                    });
+                }
+            }
+            int num;
+            num = 18;
+            int num2;
+            num2 = 4096;
+            int num3;
+            num3 = 0;
+            int position;
+            position = (int)output.Position;
+            output.Write8(16);
+            output.Write8((byte)length);
+            output.Write8((byte)(length >> 8));
+            output.Write8((byte)(length >> 16));
+            while (num3 < length)
+            {
+                int position2;
+                position2 = (int)output.Position;
+                output.Write8(0);
+                for (int num4 = 0; num4 < 8; num4++)
+                {
+                    if (num3 + 3 <= length)
+                    {
+                        int key2;
+                        key2 = (data[num3] | (data[num3 + 1] << 8) | (data[num3 + 2] << 16));
+                        List<int> value2;
+                        if (bufferWindow.TryGetValue(key2, out value2))
+                        {
+                            int j;
+                            j = 0;
+                            while (value2[j] < num3 - num2)
+                            {
+                                j++;
+                                if (j != value2.Count)
+                                {
+                                    continue;
+                                }
+                                goto IL_01cf;
+                            }
+                            int num5;
+                            num5 = -1;
+                            int num6;
+                            num6 = -1;
+                            for (; j < value2.Count; j++)
+                            {
+                                int num7;
+                                num7 = value2[j];
+                                if (num7 >= num3 - 1)
+                                {
+                                    break;
+                                }
+                                int k;
+                                for (k = 3; num3 + k < length && data[num7 + k] == data[num3 + k] && k < num; k++)
+                                {
+                                }
+                                if (k > num5)
+                                {
+                                    num5 = k;
+                                    num6 = num7;
+                                }
+                            }
+                            if (num6 != -1)
+                            {
+                                int num8;
+                                num8 = num3 - num6 - 1;
+                                output.Write8((byte)((num5 - 3 << 4) | (num8 >> 8)));
+                                output.Write8((byte)num8);
+                                output.Data[position2] |= (byte)(128 >> num4);
+                                num3 += num5;
+                                goto IL_01de;
+                            }
+                        }
+                    }
+                    goto IL_01cf;
+                IL_01cf:
+                    output.Write8(data[num3++]);
+                    goto IL_01de;
+                IL_01de:
+                    if (num3 >= length)
+                    {
+                        break;
+                    }
+                }
+            }
+            return output;
+        }
 
         public static IOStream CompLZ77(IOStream input, int length)
         {

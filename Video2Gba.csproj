@@ -79,6 +79,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ActiveMemory.cs" />
     <Compile Include="BufferHelper.cs" />
     <Compile Include="CompressionHeaders.cs" />
     <Compile Include="FrameOps.cs" />

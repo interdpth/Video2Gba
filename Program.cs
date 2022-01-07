@@ -149,18 +149,18 @@ namespace Video2Gba
             Console.WriteLine("Decoding video");
             // get wav
             //./ffmpeg -i alie.mp4 .\alie.wav
-            if (!Directory.Exists(Processing))
-            {
-                Directory.CreateDirectory(Processing);
-            }
-            else
-            {
-                List<string> killme = Directory.GetFiles(Processing).ToList();
-                foreach (string sz in killme)
-                {
-                    File.Delete(sz);
-                }
-            }
+            //if (!Directory.Exists(Processing))
+            //{
+            //    Directory.CreateDirectory(Processing);
+            //}
+            //else
+            //{
+            //    List<string> killme = Directory.GetFiles(Processing).ToList();
+            //    foreach (string sz in killme)
+            //    {
+            //        File.Delete(sz);
+            //    }
+            //}
 
             if (!Directory.Exists(OutputFolder))
             {
@@ -176,32 +176,56 @@ namespace Video2Gba
             }
 
             uint fr = (ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value.Value) / 1000;
-            int targetFps = 1;
+            int targetFps = 20;
 
-            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i alie.mp4 -ss 00:01:10 -t 00:01:05 -filter:v fps=fps={targetFps} {Processing}\\alie.mp4" };
+            //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i alie.mp4 -filter:v fps=fps={targetFps} {Processing}\\alie.mp4" };
 
+            //var P = Process.Start(PSI);
+
+            //P.WaitForExit();
+
+            //float fps = (float)((float)fr / (float)targetFps);
+            //if (fps > 2.0 || fps < 0.5)
+            //{
+            //    Console.WriteLine("Range is bad, clamping value");
+            //    if (fps > 2.0f) fps = 2.0f;
+            //    if (fps < 0.5f) fps = 0.5f;
+
+            //}
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -af atempo={fps} {Processing}\\alie.wav" };
+            //P = Process.Start(PSI);
+            //P.WaitForExit();
+
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 160x128 {Processing}/tmp%03d.png" };
+            //P = Process.Start(PSI);
+            //P.WaitForExit();
+
+            ////FInal file
+            ///ffmpeg -i input.mp4 output.mp4
+            ///
+            //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
+            //var P = Process.Start(PSI);
+            //P.WaitForExit();
+
+            var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
             var P = Process.Start(PSI);
-
             P.WaitForExit();
 
-            float fps = (float)((float)fr / (float)targetFps);
-            if (fps > 2.0 || fps < 0.5)
+            //Read in the file.
+
+            byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
+
+            //swap endianness
+            List<byte> newOrder = new List<byte>();
+            for(int i = 0; i<video.Length;i+=4)
             {
-                Console.WriteLine("Range is bad, clamping value");
-                if (fps > 2.0f) fps = 2.0f;
-                if (fps < 0.5f) fps = 0.5f;
-
+                byte[] tmp = new byte[4];
+                Array.Copy(video, i, tmp, 0, 4);
+                newOrder.AddRange(tmp.Reverse());
             }
-            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -af atempo={fps} {Processing}\\alie.wav" };
-            P = Process.Start(PSI);
-            P.WaitForExit();
-
-            PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 240x160 {Processing}/tmp%03d.png" };
-            P = Process.Start(PSI);
-            P.WaitForExit();
-
-
-
+            ROM.MakeSource("ALIEtest", newOrder.ToArray(), $"{OutputFolder}");
+            ROM.Write($"{OutputFolder}", "Alietest");
+            return;
             List<string> images = Directory.GetFiles(Processing).ToList().Where(x => x.Contains("png")).ToList();
            images =  images.OrderBy(x =>    Convert.ToInt32(new FileInfo(x).Name.Replace(".png", "").Replace("tmp",""))).ToList();
                   
@@ -228,6 +252,10 @@ namespace Video2Gba
                 byte[] tmp = s.GetData();
 
 
+
+                
+
+
                 //PSI = new ProcessStartInfo { RedirectStandardError = true, RedirectStandardOutput = true, FileName = "grit.exe", UseShellExecute = false, Arguments = $"{hey} -gb -gB 16 -ftbin" };
                 ////creates tmp001.img.bin
                 //P = Process.Start(PSI);
@@ -248,6 +276,7 @@ namespace Video2Gba
                         Program.FramesTable.AppendLine("{" + rawName + "},");
                     }
                     //insert gfx                    
+
                     FrameOps.CompressFile2(ref data, rawName, OutputFolder);
                     GC.Collect();
                     if (a % 1000 == 0)
