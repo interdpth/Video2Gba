@@ -309,8 +309,10 @@ namespace Video2Gba
                     //3
                     //etc
                     //init tmp data arrays
-                    int maxX = 240 / blockWidth;
-                    int maxY = 160 / blockHeight;
+
+                    //160x128
+                    int maxX = 160 / blockWidth;
+                    int maxY = 128 / blockHeight;
                     CustomFrame cf = new CustomFrame();
 
                     for (int x = 0; x < maxX; x++)
@@ -326,7 +328,7 @@ namespace Video2Gba
                                 {
                                     int trueX = tmpX + x;
                                     int trueY = tmpY + y;
-                                    int pixel = trueX + trueY * 240;
+                                    int pixel = trueX + trueY * 160;
 
                                     buff[tmpX + tmpY * blockWidth] = newData[pixel];
                                 }
@@ -395,15 +397,34 @@ namespace Video2Gba
         {
             //Write frame blocks.
             newFile.WriteU32((uint)frameBlocks.Count);
+     
             for (int frameBlock = 0; frameBlock < frameBlocks.Count; frameBlock++)
             {
                 var fb = frameBlocks[frameBlock];
+                IOStream compressBlocks = new IOStream();
 
                 newFile.Write8((byte)fb.header);
                 newFile.Write32((int)fb.ID);
                 newFile.Write32((int)fb.Index);
                 newFile.Write32((int)fb.Length);
-                newFile.Write(fb.Data, fb.Data.Length);
+                using (var compress = new GbaNativeCompression(fb.Data))
+                {
+                    byte[] newDAta = compress.Lz77Compress();
+                    if (newDAta.Length < compressBlocks.Data.Length)
+                    {
+                        foreach (byte b in newDAta)
+                        {
+                            newFile.Write8(b);
+                        }
+                    }
+                    else
+                    {
+                        //Lazy writing
+                       
+                        newFile.Write(fb.Data, fb.Data.Length);
+                    }
+                
+                }
             }
         }
 
@@ -428,10 +449,10 @@ namespace Video2Gba
             //MD5 of data, and FrameBlock
 
             Dictionary<long, CustomFrame> sceens = new Dictionary<long, CustomFrame>();
-
+            //160x128 
             int idBase = 0;
-            int blockWidth = 64;
-            int blockHeight = 64;
+            int blockWidth = 160/16;
+            int blockHeight =128;
 
 
             //update frame screen to use frame hash
@@ -466,12 +487,10 @@ namespace Video2Gba
             //Screens 
             //Frames -> Pointer to screen
 
-
-
-
             string header = "WHID.";
 
-            IOStream newFile = new IOStream(nsize + 12 + header.Length + 1);
+            int screenSize = 4 * sceens[0].ContainerIDs.Count * sceens.Count;
+            IOStream newFile = new IOStream(nsize + 12 + header.Length + 1 + screenSize + Files.Count*4);
             newFile.WriteASCII(header);
             newFile.Write8(20);
             newFile.Write8((byte)blockWidth);
@@ -505,7 +524,7 @@ namespace Video2Gba
 
                 newFile.Write32(offset);
             }
-
+            long endOfFile = newFile.Position;
             newFile.Position = pointerOffset;
             ///write headers
             //4 bytes, pointer to FrameBlocks
@@ -516,7 +535,9 @@ namespace Video2Gba
             newFile.Write32(screenPositions);
             newFile.Write32(framePositions);
 
-            File.WriteAllBytes($"whidglecodec{blockWidth}x{blockHeight}_full", newFile.Data);
+            byte[] newArray = new byte[endOfFile];
+            Array.Copy(newFile.Data, newArray, endOfFile);
+           File.WriteAllBytes($"whidglecodec{blockWidth}x{blockHeight}_full", newArray);
             long newSize = GetSize();
 
             Console.WriteLine($"New size {newSize}");

@@ -24,6 +24,7 @@ TARGET		:= $(notdir $(CURDIR))
 BUILD		:= build
 SOURCES		:= source
 INCLUDES	:= include
+INCLUDES    += "C:\devkitPro\devkitARM\arm-none-eabi\include\machine"
 DATA		:= data
 MUSIC		:=
 

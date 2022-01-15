@@ -43,6 +43,23 @@ namespace Video2Gba
                 lzComp = null;
                 Console.WriteLine("Bad data");
             }
+
+
+            try
+            {
+                using (var comp = new GbaNativeCompression(rawData))
+                {
+                    rlComp = comp.RleCompress();
+                }
+            }
+            catch (Exception e)
+            {
+                //Compression was bad. 
+                rlComp = null;
+                Console.WriteLine("Bad data");
+            }
+
+
             try
             {
                 using (var comp = new GbaNativeCompression(rawData))
@@ -97,10 +114,10 @@ namespace Video2Gba
 
             if (rlComp != null && rlComp.Length < bestSize)
             {
-                //bestBuffer = rlComp;
-                //bestSize = rlComp.Length;
-                //changed = true;
-                //header = CompressionHeaders.RLEHEADER;
+                bestBuffer = rlComp;
+                bestSize = rlComp.Length;
+                changed = true;
+                header = CompressionHeaders.RLEHEADER;
             }
             if (rlComp16 != null && rlComp16.Length < bestSize)
             {

@@ -2,6 +2,7 @@
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -211,7 +212,7 @@ namespace Video2Gba
             IOStream tmp = new IOStream(0);
 
             //encoded should 0x64: 64 bytes
-            for(int i = 0;i<240*160*2;i++)
+            for(int i = 0;i<240*160*4;i++)
             {
                 Random sel = new Random(i);
 
@@ -291,7 +292,7 @@ namespace Video2Gba
             //}
 
             uint fr = (ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("alie.mp4").Properties.System.Video.FrameRate.Value.Value) / 1000;
-            int targetFps = 20;
+            int targetFps = 15;
 
             //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i alie.mp4 -filter:v fps=fps={targetFps} {Processing}\\alie.mp4" };
 
@@ -311,22 +312,22 @@ namespace Video2Gba
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            ////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 240x160 {Processing}/tmp%03d.png" };
-            ////P = Process.Start(PSI);
-            ////P.WaitForExit();
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 160x128 {Processing}/tmp%03d.png" };
+            //P = Process.Start(PSI);
+            //P.WaitForExit();
 
-            ////FInal file
-            //// ffmpeg - i input.mp4 output.mp4
+            //FInal file
+            // ffmpeg - i input.mp4 output.mp4
 
             //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
-            // P = Process.Start(PSI);
+            //P = Process.Start(PSI);
             //P.WaitForExit();
 
             //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            ////Read in the file.
+            //Read in the file.
 
             //byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
 
@@ -343,10 +344,10 @@ namespace Video2Gba
             ////     int dumblock = 0;
             //GritSharp.GritSharp s = new GritSharp.GritSharp();
 
-            //////     //Dump files.
-            //////     //So what we're going to is pretty simple. 
-            //////     //GEt all the data
-            //////     IOStream compressedData = new IOStream();
+            ////////     //Dump files.
+            ////////     //So what we're going to is pretty simple. 
+            ////////     //GEt all the data
+            ////////     IOStream compressedData = new IOStream();
 
             //for (int a = 0; a < images.Count; a++)
             //{
@@ -358,15 +359,15 @@ namespace Video2Gba
 
 
             //    IntPtr gritRect = s.Export(hey);
-            //    byte[] tmp = s.GetData();
+            //    byte[] tmp2 = s.GetData();
 
 
             //    string rawName = $"Frame_{a}";
 
             //    try
             //    {
-            //        byte[] data = tmp;
-            //        File.WriteAllBytes($"{Processing}\\{rawName}.dhbin", tmp);
+            //        byte[] data = tmp2;
+            //        File.WriteAllBytes($"{Processing}\\{rawName}.dhbin", tmp2);
             //        //insert gfx                    
 
             //        // FrameOps.CompressFile2(ref data, rawName, OutputFolder);
