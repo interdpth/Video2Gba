@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Video2Gba
 {
@@ -62,6 +59,7 @@ namespace Video2Gba
             headerLines = new List<string>();
             sourceLines = new List<string>();
         }
+
         //lol
         public static void MakeSource(string ArrayName, sbyte[] buffer, string outputdir)
         {

@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Video2Gba
 {
@@ -29,6 +27,7 @@ namespace Video2Gba
             }
             set
             {
+                if (_maxLength != -1 && value > _maxLength) throw new Exception("Buffer is too big.");
                 Array.Resize(ref data, value);
             }
         }
@@ -37,7 +36,7 @@ namespace Video2Gba
         {
             get
             {
-               return true;
+                return true;
             }
         }
 
@@ -57,6 +56,7 @@ namespace Video2Gba
             }
         }
 
+        private long _maxLength;
         //public override long Length
         //{
         //    get
@@ -78,11 +78,12 @@ namespace Video2Gba
         //    }
         //}
 
-        public IOStream(int capacity = 4)
+        public IOStream(int capacity = 4, long maxLength = -1)
         {
             data = new byte[capacity];
             pos = 0;
             length = 0;
+            _maxLength = maxLength;
         }
 
         public IOStream(byte[] data)
@@ -192,7 +193,7 @@ namespace Video2Gba
                 length = pos + 2;
                 if (length > Capacity)
                 {
-                    Capacity=pos + 2;
+                    Capacity = pos + 2;
                 }
             }
             data[pos] = (byte)val;
@@ -287,7 +288,7 @@ namespace Video2Gba
 
         public ushort Read16(int offset)
         {
-            return (ushort)(BitConverter.ToInt16(data,offset));
+            return (ushort)(BitConverter.ToInt16(data, offset));
         }
 
         public int Read32(int offset)
@@ -315,8 +316,8 @@ namespace Video2Gba
 
         public void Write16(int offset, ushort val)
         {
-          //  data[offset] = (byte)val;
-          //  data[offset + 1] = (byte)(val >> 8);
+            //  data[offset] = (byte)val;
+            //  data[offset + 1] = (byte)(val >> 8);
 
             Array.Copy(BitConverter.GetBytes(val), 0, data, offset, 2);
         }
@@ -350,13 +351,13 @@ namespace Video2Gba
         {
             Buffer.BlockCopy(data, srcOffset, dstData, dstOffset, len);
         }
-        
+
         public void CopyFromArray(Array srcData, int srcOffset, int dstOffset, int len)
         {
-          
+
             Buffer.BlockCopy(srcData, srcOffset, data, dstOffset, len);
         }
-        
+
         public void CopyFromArray(Array srcData, int len)
         {
             if (pos + len > data.Length)
@@ -364,7 +365,7 @@ namespace Video2Gba
                 Capacity = pos + len;
             }
             Buffer.BlockCopy(srcData, 0, data, pos, len);
-        
+
         }
 
         public void OverlappingCopy(int amount, int window)
@@ -409,11 +410,11 @@ namespace Video2Gba
         private int FindEndOfData()
         {
             int endOfData;
-           
-                endOfData = length;
-                FindEndOfRun(ref endOfData);
-            
-           
+
+            endOfData = length;
+            FindEndOfRun(ref endOfData);
+
+
             return endOfData;
         }
 
@@ -575,10 +576,10 @@ namespace Video2Gba
                 offset = i;
                 return false;
             }
-           
-                endOfData = Capacity;
-                FindEndOfRun(ref endOfData);
-            
+
+            endOfData = Capacity;
+            FindEndOfRun(ref endOfData);
+
             offset = endOfData;
             return true;
         }
@@ -747,37 +748,46 @@ namespace Video2Gba
 
 
 
-        public void WriteData(Array buffer,  int elSize, int count)
+        public void WriteData(Array buffer, int elSize, int count)
         {
 
             byte[] newBuffer = new byte[buffer.Length * elSize];
-            Array.Copy(buffer, newBuffer, buffer.Length* elSize);
-         
+            Array.Copy(buffer, newBuffer, buffer.Length * elSize);
+
             for (int i = 0; i < buffer.Length * elSize; i++)
             {
                 Write8(newBuffer[i]);
             }
 
-    
+
 
         }
-
-        public override void Write(byte[] buffer, int offset, int count)
+        public override void Write(byte[] buffer, int pos, int count)
         {
             int oldPos = (int)Position;
-            if (count + offset > Capacity)
+            if (count + pos > Capacity)
             {
-                Capacity = count + offset;
+                Capacity += count;
             }
-            pos = offset;
-            
-            for(int i = 0; i<count; i++)
+            Position = pos;
+            for (int i = 0; i < count; i++)
+            {
+                Write8(buffer[i]);
+            }
+            Position = oldPos;
+        }
+        public void Write(byte[] buffer, int count)
+        {
+            int oldPos = (int)Position;
+            if (count + Position > Capacity)
+            {
+                Capacity += count;
+            }
+            for (int i = 0; i < count; i++)
             {
                 Write8(buffer[i]);
             }
 
-            pos = oldPos;
-       
         }
     }
 

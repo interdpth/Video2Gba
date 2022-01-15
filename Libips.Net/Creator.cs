@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.IO;
 using Video2Gba.LibIpsNet.Utils;
-using System.IO;
 
 namespace Video2Gba.LibIpsNet
 {
     public class Creator
     {
- 
+
         // Known situations where this function does not generate an optimal patch:
         // In:  80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80 80
         // Out: FF FF FF FF FF FF FF FF 00 01 02 03 04 05 06 07 FF FF FF FF FF FF FF FF
@@ -185,10 +181,10 @@ namespace Video2Gba.LibIpsNet
 
                 patch.Write32(EndOfFile);
 
-               
+
                 if (sourcelen > targetlen) patch.Write24((int)targetlen);
 
-             //   if (sixteenmegaushorts) throw new Exceptions.Ips16MegaushortsException(); ;
+                //   if (sixteenmegaushorts) throw new Exceptions.Ips16MegaushortsException(); ;
                 if (patch.Length == 8) throw new Exceptions.IpsIdenticalException();
             }
             return patch.Data;
@@ -240,7 +236,7 @@ namespace Video2Gba.LibIpsNet
                     }
 
                     // Avoid premature EOF.
-                    if (offset ==EndOfFile)
+                    if (offset == EndOfFile)
                     {
                         offset--;
                         thislen++;
@@ -302,7 +298,7 @@ namespace Video2Gba.LibIpsNet
 
                                     // RLE-worthy at end of data.
                                     (byteshere > RLEMinLength && stopat + byteshere == thislen) ||
-                                    (byteshere > RLEMinLength && Compare(target, (offset + stopat + byteshere), target, (offset + stopat + byteshere + 1), RLEMinLength+1 - 1)))//rle-worthy before another rle-worthy
+                                    (byteshere > RLEMinLength && Compare(target, (offset + stopat + byteshere), target, (offset + stopat + byteshere + 1), RLEMinLength + 1 - 1)))//rle-worthy before another rle-worthy
                             {
                                 if (stopat != 0) thislen = stopat;
 
@@ -325,7 +321,7 @@ namespace Video2Gba.LibIpsNet
                         }
                         else
                         {
-                            patch.Write32(offset);                        
+                            patch.Write32(offset);
                             patch.Write16((ushort)thislen);
                             int i;
                             for (i = 0; i < thislen; i++)
@@ -338,7 +334,7 @@ namespace Video2Gba.LibIpsNet
                 }
 
                 patch.Write32(EndOfFile);
-                               
+
 
                 if (sourcelen > targetlen) patch.Write24((int)targetlen);
 

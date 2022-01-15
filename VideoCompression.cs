@@ -1,70 +1,189 @@
-﻿using NAudio.Wave;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Video2Gba.LibIpsNet;
 
 namespace Video2Gba
 {
     public class VideoCompression
     {
-
-
-        private static byte[] HuffmanCompress(byte[] frame)
+        public static int RLECompress(Stream instream, long inLength, Stream outstream)
         {
-            return new byte[1];
+            instream.Position = 0;
+            if (inLength > 0xFFFFFF)
+                throw new Exception(" Input too large");
+
+            List<byte> compressedData = new List<byte>();
+
+            // at most 0x7F+3=130 bytes are compressed into a single block.
+            // (and at most 0x7F+1=128 in an uncompressed block, however we need to read 2
+            // more, since the last byte may be part of a repetition).
+            byte[] dataBlock = new byte[130];
+            // the length of the valid content in the current data block
+            int currentBlockLength = 0;
+
+            int readLength = 0;
+            int nextByte;
+            int repCount = 1;
+            while (readLength < inLength)
+            {
+                bool foundRepetition = false;
+
+                while (currentBlockLength < dataBlock.Length && readLength < inLength)
+                {
+                    nextByte = instream.ReadByte();
+                    if (nextByte < 0)
+                        throw new Exception(" Stream too small");
+                    readLength++;
+
+                    dataBlock[currentBlockLength++] = (byte)nextByte;
+                    if (currentBlockLength > 1)
+                    {
+                        if (nextByte == dataBlock[currentBlockLength - 2])
+                            repCount++;
+                        else
+                            repCount = 1;
+                    }
+
+                    foundRepetition = repCount > 2;
+                    if (foundRepetition)
+                        break;
+                }
+
+
+                int numUncompToCopy = 0;
+                if (foundRepetition)
+                {
+                    // if a repetition was found, copy block size - 3 bytes as compressed data
+                    numUncompToCopy = currentBlockLength - 3;
+                }
+                else
+                {
+                    // if no repetition was found, copy min(block size, max block size - 2) bytes as uncompressed data.
+                    numUncompToCopy = Math.Min(currentBlockLength, dataBlock.Length - 2);
+                }
+
+                #region insert uncompressed block
+                if (numUncompToCopy > 0)
+                {
+                    byte flag = (byte)(numUncompToCopy - 1);
+                    compressedData.Add(flag);
+                    for (int i = 0; i < numUncompToCopy; i++)
+                        compressedData.Add(dataBlock[i]);
+                    // shift some possibly remaining bytes to the start
+                    for (int i = numUncompToCopy; i < currentBlockLength; i++)
+                        dataBlock[i - numUncompToCopy] = dataBlock[i];
+                    currentBlockLength -= numUncompToCopy;
+                }
+                #endregion
+
+                if (foundRepetition)
+                {
+                    // if a repetition was found, continue until the first different byte
+                    // (or until the buffer is full)
+                    while (currentBlockLength < dataBlock.Length && readLength < inLength)
+                    {
+                        nextByte = instream.ReadByte();
+                        if (nextByte < 0)
+                            throw new Exception(" Stream too small");
+                        readLength++;
+
+                        dataBlock[currentBlockLength++] = (byte)nextByte;
+
+                        if (nextByte != dataBlock[0])
+                            break;
+                        else
+                            repCount++;
+                    }
+
+                    // the next repCount bytes are the same.
+                    #region insert compressed block
+                    byte flag = (byte)(0x80 | (repCount - 3));
+                    compressedData.Add(flag);
+                    compressedData.Add(dataBlock[0]);
+                    // make sure to shift the possible extra byte to the start
+                    if (repCount != currentBlockLength)
+                        dataBlock[0] = dataBlock[currentBlockLength - 1];
+                    currentBlockLength -= repCount;
+                    #endregion
+                }
+            }
+
+            // write any reamaining bytes as uncompressed
+            if (currentBlockLength > 0)
+            {
+                byte flag = (byte)(currentBlockLength - 1);
+                compressedData.Add(flag);
+                for (int i = 0; i < currentBlockLength; i++)
+                    compressedData.Add(dataBlock[i]);
+                currentBlockLength = 0;
+            }
+
+            // write the RLE marker and the decompressed size
+            outstream.WriteByte(0x30);
+            int compLen = compressedData.Count;
+            outstream.WriteByte((byte)(inLength & 0xFF));
+            outstream.WriteByte((byte)((inLength >> 8) & 0xFF));
+            outstream.WriteByte((byte)((inLength >> 16) & 0xFF));
+
+            // write the compressed data
+            outstream.Write(compressedData.ToArray(), 0, compLen);
+
+            // the total compressed stream length is the compressed data length + the 4-byte header
+            return compLen + 4;
         }
 
-        //byte count is how much u8, u16, 3, u32
- 
-        private static byte[] DescribeCompress(byte[] old, byte[] newFrame)
-        {
-            //
-            List<describe> compressedBuf = new List<describe>();
-            IOStream newStream = new IOStream(newFrame.Length / 4);
-            newStream.Seek(4);
+
+        //private static byte[] HuffmanCompress(byte[] frame)
+        //{
+        //    return new byte[1];
+        //}
+
+        ////byte count is how much u8, u16, 3, u32
+
+        //private static byte[] DescribeCompress(byte[] old, byte[] newFrame)
+        //{
+        //    //
+        //    List<describe> compressedBuf = new List<describe>();
+        //    IOStream newStream = new IOStream(newFrame.Length / 4);
+        //    newStream.Seek(4);
 
 
-            ////Split into 4.
-            ////If not size is not aligned 
-            //int len = buffer.Length / 4;
+        //    ////Split into 4.
+        //    ////If not size is not aligned 
+        //    //int len = buffer.Length / 4;
 
-            //for (int i = 0; i < buffer.Length; i++)
-            //{
-            //    int realSize = i + len < buffer.Length ? len : buffer.Length - i;
-            //    byte[] newBuffer = new byte[realSize];
-            //    Array.Copy(buffer, i, newBuffer, 0, realSize);
-            //    buffers.Add(Compress(newBuffer, enableCircleComp - 1));
-            //    i += realSize;
-            //}
-
-
-
-            //for (ushort i = 0; i < newFrame.Length / 4; i++)
-            //{
-            //    if (old[i] != newFrame[i])
-            //    {
-            //        compressedBuf.Add(new describe(i, newFrame[i]));
-            //        newStream.Write16(i);
-            //        newStream.Write8(newFrame[i]);
-            //    }
-            //}
+        //    //for (int i = 0; i < buffer.Length; i++)
+        //    //{
+        //    //    int realSize = i + len < buffer.Length ? len : buffer.Length - i;
+        //    //    byte[] newBuffer = new byte[realSize];
+        //    //    Array.Copy(buffer, i, newBuffer, 0, realSize);
+        //    //    buffers.Add(Compress(newBuffer, enableCircleComp - 1));
+        //    //    i += realSize;
+        //    //}
 
 
 
-            newStream.Seek(0);
-            newStream.Write32(compressedBuf.Count - 4);
-            byte[] returnvalue = new byte[4 + newStream.Length];
-            BitConverter.GetBytes(CompressionHeaders.DESCRIBEHEADER).CopyTo(returnvalue, 0);
-            newStream.CopyToArray(0, returnvalue, 8, returnvalue.Length);
+        //    //for (ushort i = 0; i < newFrame.Length / 4; i++)
+        //    //{
+        //    //    if (old[i] != newFrame[i])
+        //    //    {
+        //    //        compressedBuf.Add(new describe(i, newFrame[i]));
+        //    //        newStream.Write16(i);
+        //    //        newStream.Write8(newFrame[i]);
+        //    //    }
+        //    //}
 
-            return returnvalue;
 
-        }
+
+        //    newStream.Seek(0);
+        //    newStream.Write32(compressedBuf.Count - 4);
+        //    byte[] returnvalue = new byte[4 + newStream.Length];
+        //    BitConverter.GetBytes(CompressionHeaders.DESCRIBEHEADER).CopyTo(returnvalue, 0);
+        //    newStream.CopyToArray(0, returnvalue, 8, returnvalue.Length);
+
+        //    return returnvalue;
+
+        //}
         public static byte[] GBatroidRLE(byte[] input)
         {
             IOStream output = new IOStream();
@@ -214,7 +333,7 @@ namespace Video2Gba
 
 
             byte[] returnvalue = new byte[8 + output.Length];
-            BitConverter.GetBytes(CompressionHeaders.RLEHEADER).CopyTo(returnvalue, 0);
+            //BitConverter.GetBytes(CompressionHeaders.RLEHEADER).CopyTo(returnvalue, 0);
             BitConverter.GetBytes(output.Length).CopyTo(returnvalue, 4);
             output.CopyToArray(0, returnvalue, 8, (int)output.Length);
 
@@ -224,122 +343,128 @@ namespace Video2Gba
         public static byte[] oldFrame = null;
         public static IOStream CompLZ77(byte[] input)
         {
-            IOStream io = new IOStream();
-            io.CopyFromArray(input, input.Length);
-            return CompLZ77(io, (int)input.Length);
+
+            return new IOStream(LZ77.Compress(input));
         }
-        public static IOStream CompLZ772(IOStream input, int length)
+
+        public static bool CompLZ772(IOStream input, int length, ref IOStream output)
         {
-            IOStream output = new IOStream(4);
-            byte[] data;
-            data = input.Data;
-            Dictionary<int, List<int>> bufferWindow;
-            bufferWindow = new Dictionary<int, List<int>>();
-            for (int i = 0; i < input.Length - 2; i++)
+            try
             {
-                int key;
-                key = (data[i] | (data[i + 1] << 8) | (data[i + 2] << 16));
-                List<int> value;
-                if (bufferWindow.TryGetValue(key, out value))
+                byte[] data;
+                data = input.Data;
+                Dictionary<int, List<int>> bufferWindow;
+                bufferWindow = new Dictionary<int, List<int>>();
+                for (int i = 0; i < input.Length - 2; i++)
                 {
-                    value.Add(i);
-                }
-                else
-                {
-                    bufferWindow.Add(key, new List<int>
+                    int key;
+                    key = (data[i] | (data[i + 1] << 8) | (data[i + 2] << 16));
+                    List<int> value;
+                    if (bufferWindow.TryGetValue(key, out value))
+                    {
+                        value.Add(i);
+                    }
+                    else
+                    {
+                        bufferWindow.Add(key, new List<int>
                     {
                         i
                     });
+                    }
                 }
-            }
-            int num;
-            num = 18;
-            int num2;
-            num2 = 4096;
-            int num3;
-            num3 = 0;
-            int position;
-            position = (int)output.Position;
-            output.Write8(16);
-            output.Write8((byte)length);
-            output.Write8((byte)(length >> 8));
-            output.Write8((byte)(length >> 16));
-            while (num3 < length)
-            {
-                int position2;
-                position2 = (int)output.Position;
-                output.Write8(0);
-                for (int num4 = 0; num4 < 8; num4++)
+                int num;
+                num = 18;
+                int num2;
+                num2 = 4096;
+                int num3;
+                num3 = 0;
+                int position;
+                position = (int)output.Position;
+                output.Write8(16);
+                output.Write8((byte)length);
+                output.Write8((byte)(length >> 8));
+                output.Write8((byte)(length >> 16));
+                while (num3 < length)
                 {
-                    if (num3 + 3 <= length)
+                    int position2;
+                    position2 = (int)output.Position;
+                    output.Write8(0);
+                    for (int num4 = 0; num4 < 8; num4++)
                     {
-                        int key2;
-                        key2 = (data[num3] | (data[num3 + 1] << 8) | (data[num3 + 2] << 16));
-                        List<int> value2;
-                        if (bufferWindow.TryGetValue(key2, out value2))
+                        if (num3 + 3 <= length)
                         {
-                            int j;
-                            j = 0;
-                            while (value2[j] < num3 - num2)
+                            int key2;
+                            key2 = (data[num3] | (data[num3 + 1] << 8) | (data[num3 + 2] << 16));
+                            List<int> value2;
+                            if (bufferWindow.TryGetValue(key2, out value2))
                             {
-                                j++;
-                                if (j != value2.Count)
+                                int j;
+                                j = 0;
+                                while (value2[j] < num3 - num2)
                                 {
-                                    continue;
+                                    j++;
+                                    if (j != value2.Count)
+                                    {
+                                        continue;
+                                    }
+                                    goto IL_01cf;
                                 }
-                                goto IL_01cf;
-                            }
-                            int num5;
-                            num5 = -1;
-                            int num6;
-                            num6 = -1;
-                            for (; j < value2.Count; j++)
-                            {
-                                int num7;
-                                num7 = value2[j];
-                                if (num7 >= num3 - 1)
+                                int num5;
+                                num5 = -1;
+                                int num6;
+                                num6 = -1;
+                                for (; j < value2.Count; j++)
                                 {
-                                    break;
+                                    int num7;
+                                    num7 = value2[j];
+                                    if (num7 >= num3 - 1)
+                                    {
+                                        break;
+                                    }
+                                    int k;
+                                    for (k = 3; num3 + k < length && data[num7 + k] == data[num3 + k] && k < num; k++)
+                                    {
+                                    }
+                                    if (k > num5)
+                                    {
+                                        num5 = k;
+                                        num6 = num7;
+                                    }
                                 }
-                                int k;
-                                for (k = 3; num3 + k < length && data[num7 + k] == data[num3 + k] && k < num; k++)
+                                if (num6 != -1)
                                 {
+                                    int num8;
+                                    num8 = num3 - num6 - 1;
+                                    output.Write8((byte)((num5 - 3 << 4) | (num8 >> 8)));
+                                    output.Write8((byte)num8);
+                                    output.Data[position2] |= (byte)(128 >> num4);
+                                    num3 += num5;
+                                    goto IL_01de;
                                 }
-                                if (k > num5)
-                                {
-                                    num5 = k;
-                                    num6 = num7;
-                                }
-                            }
-                            if (num6 != -1)
-                            {
-                                int num8;
-                                num8 = num3 - num6 - 1;
-                                output.Write8((byte)((num5 - 3 << 4) | (num8 >> 8)));
-                                output.Write8((byte)num8);
-                                output.Data[position2] |= (byte)(128 >> num4);
-                                num3 += num5;
-                                goto IL_01de;
                             }
                         }
-                    }
-                    goto IL_01cf;
-                IL_01cf:
-                    output.Write8(data[num3++]);
-                    goto IL_01de;
-                IL_01de:
-                    if (num3 >= length)
-                    {
-                        break;
+                        goto IL_01cf;
+                    IL_01cf:
+                        output.Write8(data[num3++]);
+                        goto IL_01de;
+                    IL_01de:
+                        if (num3 >= length)
+                        {
+                            break;
+                        }
                     }
                 }
             }
-            return output;
+            catch
+            {
+                return false;
+            }
+            return true;
         }
 
         public static IOStream CompLZ77(IOStream input, int length)
         {
-            IOStream output = new IOStream(4);
+            IOStream output = new IOStream(0, length);
             byte[] data;
             data = input.Data;
             Dictionary<int, List<int>> bufferWindow;
@@ -361,14 +486,12 @@ namespace Video2Gba
                     });
                 }
             }
-            int num;
-            num = 18;
-            int num2;
-            num2 = 4096;
-            int num3;
-            num3 = 0;
-            int position;
-            position = (int)output.Position;
+            int num = 18;
+
+            int num2 = 4096;
+
+            int num3 = 0;
+            int position = (int)output.Position;
             output.Write8(16);
             output.Write8((byte)length);
             output.Write8((byte)(length >> 8));
@@ -469,6 +592,134 @@ namespace Video2Gba
         //Run IPS on the frames//ips needs to use gba rl 
         //Run lz after rejoining.
 
+
+        public static int RleCompress(Stream instream, ref IOStream outstream)
+        {
+            long inLength = instream.Length;
+            if (inLength > 0xFFFFFF)
+                throw new Exception("InputTooLargeException.");//InputTooLargeException();
+
+            List<byte> compressedData = new List<byte>();
+
+            // at most 0x7F+3=130 bytes are compressed into a single block.
+            // (and at most 0x7F+1=128 in an uncompressed block, however we need to read 2
+            // more, since the last byte may be part of a repetition).
+            byte[] dataBlock = new byte[130];
+            // the length of the valid content in the current data block
+            int currentBlockLength = 0;
+
+            int readLength = 0;
+            int nextByte;
+            int repCount = 1;
+            while (readLength < inLength)
+            {
+                bool foundRepetition = false;
+
+                while (currentBlockLength < dataBlock.Length && readLength < inLength)
+                {
+                    nextByte = instream.ReadByte();
+                    if (nextByte < 0)
+                        throw new Exception("Stream too short.");//StreamTooShortException();
+                    readLength++;
+
+                    dataBlock[currentBlockLength++] = (byte)nextByte;
+                    if (currentBlockLength > 1)
+                    {
+                        if (nextByte == dataBlock[currentBlockLength - 2])
+                            repCount++;
+                        else
+                            repCount = 1;
+                    }
+
+                    foundRepetition = repCount > 2;
+                    if (foundRepetition)
+                        break;
+                }
+
+
+                int numUncompToCopy = 0;
+                if (foundRepetition)
+                {
+                    // if a repetition was found, copy block size - 3 bytes as compressed data
+                    numUncompToCopy = currentBlockLength - 3;
+                }
+                else
+                {
+                    // if no repetition was found, copy min(block size, max block size - 2) bytes as uncompressed data.
+                    numUncompToCopy = Math.Min(currentBlockLength, dataBlock.Length - 2);
+                }
+
+                #region insert uncompressed block
+                if (numUncompToCopy > 0)
+                {
+                    byte flag = (byte)(numUncompToCopy - 1);
+                    compressedData.Add(flag);
+                    for (int i = 0; i < numUncompToCopy; i++)
+                        compressedData.Add(dataBlock[i]);
+                    // shift some possibly remaining bytes to the start
+                    for (int i = numUncompToCopy; i < currentBlockLength; i++)
+                        dataBlock[i - numUncompToCopy] = dataBlock[i];
+                    currentBlockLength -= numUncompToCopy;
+                }
+                #endregion
+
+                if (foundRepetition)
+                {
+                    // if a repetition was found, continue until the first different byte
+                    // (or until the buffer is full)
+                    while (currentBlockLength < dataBlock.Length && readLength < inLength)
+                    {
+                        nextByte = instream.ReadByte();
+                        if (nextByte < 0)
+                            throw new Exception("Stream too short.");//StreamTooShortException();
+                        readLength++;
+
+                        dataBlock[currentBlockLength++] = (byte)nextByte;
+
+                        if (nextByte != dataBlock[0])
+                            break;
+                        else
+                            repCount++;
+                    }
+
+                    // the next repCount bytes are the same.
+                    #region insert compressed block
+                    byte flag = (byte)(0x80 | (repCount - 3));
+                    compressedData.Add(flag);
+                    compressedData.Add(dataBlock[0]);
+                    // make sure to shift the possible extra byte to the start
+                    if (repCount != currentBlockLength)
+                        dataBlock[0] = dataBlock[currentBlockLength - 1];
+                    currentBlockLength -= repCount;
+                    #endregion
+                }
+            }
+
+            // write any reamaining bytes as uncompressed
+            if (currentBlockLength > 0)
+            {
+                byte flag = (byte)(currentBlockLength - 1);
+                compressedData.Add(flag);
+                for (int i = 0; i < currentBlockLength; i++)
+                    compressedData.Add(dataBlock[i]);
+                currentBlockLength = 0;
+            }
+
+            // write the RLE marker and the decompressed size
+            outstream.WriteByte(0x30);
+            int compLen = compressedData.Count;
+            outstream.WriteByte((byte)(inLength & 0xFF));
+            outstream.WriteByte((byte)((inLength >> 8) & 0xFF));
+            outstream.WriteByte((byte)((inLength >> 16) & 0xFF));
+
+            // write the compressed data
+            outstream.Write(compressedData.ToArray(), 0, compLen);
+
+            // the total compressed stream length is the compressed data length + the 4-byte header
+            return compLen + 4;
+        }
+
+
         public static byte[] RLCompWrite(byte[] srcp)
         {
             return RLCompWrite(srcp, srcp.Length);
@@ -476,7 +727,7 @@ namespace Video2Gba
         //===========================================================================
         //  Run length encoding (bytes)
         //===========================================================================
-       public static byte[]  RLCompWrite(byte[] srcp, int size)
+        public static byte[] RLCompWrite(byte[] srcp, int size)
         {
             int RLDstCount;                // Number of bytes of compressed data
             int RLSrcCount;                // Processed data volume of the compression target data (in bytes)
@@ -485,11 +736,11 @@ namespace Video2Gba
             byte rawDataLength;             // Length of data not run
             byte i;
             IOStream dstp = new IOStream(size);
-            
-          //  dbg_printf_rl(stderr, "RLCompWrite\tsize=%d\n", size);
+
+            //  dbg_printf_rl(stderr, "RLCompWrite\tsize=%d\n", size);
 
             //  Data header (The size after decompression)
-      //      *(u32*)dstp = size << 8 | 0x80;  // data header
+            //      *(u32*)dstp = size << 8 | 0x80;  // data header
             dstp.Write32(size << 8 | 0x80);
             RLDstCount = 4;
 
@@ -499,7 +750,7 @@ namespace Video2Gba
 
             while (RLSrcCount < size)
             {
-            //    startp = srcp[RLSrcCount];    // Set compression target data
+                //    startp = srcp[RLSrcCount];    // Set compression target data
 
                 for (i = 0; i < 128; i++)      // Data volume that can be expressed in 7 bits is 0 to 127
                 {
@@ -512,7 +763,7 @@ namespace Video2Gba
 
                     if (RLSrcCount + rawDataLength + 2 < size)
                     {
-                        if (srcp[RLSrcCount+i] == srcp[RLSrcCount + i + 1] && srcp[RLSrcCount + i] == srcp[RLSrcCount + i + 2])
+                        if (srcp[RLSrcCount + i] == srcp[RLSrcCount + i + 1] && srcp[RLSrcCount + i] == srcp[RLSrcCount + i + 2])
                         {
                             RLCompFlag = 1;
                             break;
@@ -524,12 +775,12 @@ namespace Video2Gba
                 // Store data that is not encoded
                 // If the 8th bit of the data length storage byte is 0, the data series that is not encoded.
                 // The data length is x - 1, so 0-127 becomes 1-128.
-                if (rawDataLength>0)
+                if (rawDataLength > 0)
                 {
                     dstp.Write8((byte)(rawDataLength - 1));
 
 
-                //    dstp[RLDstCount++] = rawDataLength - 1;     // Store "data length - 1" (7 bits)
+                    //    dstp[RLDstCount++] = rawDataLength - 1;     // Store "data length - 1" (7 bits)
                     for (i = 0; i < rawDataLength; i++)
                     {
                         dstp.Write8(srcp[RLSrcCount++]);
@@ -538,7 +789,7 @@ namespace Video2Gba
                 }
 
                 // Run Length Encoding
-                if (RLCompFlag!=0)
+                if (RLCompFlag != 0)
                 {
                     runLength = 3;
                     for (i = 3; i < 128 + 2; i++)
@@ -546,7 +797,7 @@ namespace Video2Gba
                         // Reach the end of the data for compression
                         if (RLSrcCount + runLength >= size)
                         {
-                            runLength = (byte) (size - RLSrcCount);
+                            runLength = (byte)(size - RLSrcCount);
                             break;
                         }
 
@@ -560,11 +811,11 @@ namespace Video2Gba
                     }
 
                     // If the 8th bit of the data length storage byte is 1, the data series that is encoded.
-                  //  dstp[RLDstCount++] = 0x80 | (runLength - 3);        // Add 3, and store 3 to 130
+                    //  dstp[RLDstCount++] = 0x80 | (runLength - 3);        // Add 3, and store 3 to 130
                     dstp.Write8((byte)(0x80 | (runLength - 3)));
                     dstp.Write8((byte)(srcp[RLSrcCount]));
 
-                 //   dstp[RLDstCount++] = srcp[RLSrcCount];
+                    //   dstp[RLDstCount++] = srcp[RLSrcCount];
                     RLSrcCount += runLength;
                     RLCompFlag = 0;
                 }
@@ -574,48 +825,48 @@ namespace Video2Gba
             //   Does not include Data0 used for alignment as data size
             i = 0;
             while (
-                ((RLDstCount + i) & 0x3)!=0
-                
+                ((RLDstCount + i) & 0x3) != 0
+
                 )
             {
-               // dstp[RLDstCount + i] = 0;
+                // dstp[RLDstCount + i] = 0;
                 dstp.Write8(0);
                 i++;
             }
 
-            return dstp.Data ;
+            return dstp.Data;
         }
 
-        public static byte[] FrameCompareComp(byte[] buffer)
-        {
-            byte[] returnValue = new byte[1];
-            if (buffer.Length < 200)
-            {
-                return buffer;
-            }
-            if (VideoCompression.oldFrame == null)
-            {
-                return buffer;
-            }
-            //Split the arrays up.
+        //public static byte[] FrameCompareComp(byte[] buffer)
+        //{
+        //    byte[] returnValue = new byte[1];
+        //    if (buffer.Length < 200)
+        //    {
+        //        return buffer;
+        //    }
+        //    if (VideoCompression.oldFrame == null)
+        //    {
+        //        return buffer;
+        //    }
+        //    //Split the arrays up.
 
-            IOStream src = new IOStream(4);
-            src.Seek(0);
-            src.WriteU32(CompressionHeaders.DIFFHEADER);
-            Creator c = new Creator();
-            using (var olds = new MemoryStream(VideoCompression.oldFrame))
-            {
-                using (var newf = new MemoryStream(buffer))
-                {
-                    var str = c.Create(olds, newf);
-                    src.WriteU32((uint)str.Length);
-                    src.CopyFromArray(str, str.Length);
-                }
-            }
-            returnValue = src.Data;
+        //    IOStream src = new IOStream(4);
+        //    src.Seek(0);
+        //    src.WriteU32(CompressionHeaders.DIFFHEADER);
+        //    Creator c = new Creator();
+        //    using (var olds = new MemoryStream(VideoCompression.oldFrame))
+        //    {
+        //        using (var newf = new MemoryStream(buffer))
+        //        {
+        //            var str = c.Create(olds, newf);
+        //            src.WriteU32((uint)str.Length);
+        //            src.CopyFromArray(str, str.Length);
+        //        }
+        //    }
+        //    returnValue = src.Data;
 
-            return returnValue;
-        }
+        //    return returnValue;
+        //}
 
         public static byte[] Create3(byte[] source, byte[] target)
         {

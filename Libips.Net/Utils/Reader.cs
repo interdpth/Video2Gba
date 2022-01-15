@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.IO;
+﻿using System.IO;
 namespace Video2Gba.LibIpsNet.Utils
 {
     public class Reader
@@ -36,8 +32,8 @@ namespace Video2Gba.LibIpsNet.Utils
                 byte[] data = new byte[2];
                 stream.Read(data, 0, 2);
 
-               
-                    return (data[0] << 8) | data[1];
+
+                return (data[0] << 8) | data[1];
             }
             else
             {

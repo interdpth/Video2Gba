@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 namespace Video2Gba.LibIpsNet.Utils
 {
@@ -21,7 +18,7 @@ namespace Video2Gba.LibIpsNet.Utils
         }
         // Helper to write 24bit.
         public static void Write24(int value, Stream stream)
-        {  
+        {
             uint val = (uint)value;
             byte[] b = BitConverter.GetBytes(val);
             stream.Write(b, 0, 4);

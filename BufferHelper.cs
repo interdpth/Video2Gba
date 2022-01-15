@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Video2Gba
 {
@@ -19,7 +17,7 @@ namespace Video2Gba
             //basically expandable memorystreams.
             List<IOStream> quad = new List<IOStream>() { new IOStream(), new IOStream(), new IOStream(), new IOStream() };
             //we are a byte so width and height is times 2
-       
+
             //240x160
             //Handle first screen.
             int y = 0;
@@ -28,12 +26,12 @@ namespace Video2Gba
             for (int i = 0; i < 4; i++)
             {
                 var b = buff.ToList().GetRange(i * l, l);
-                quad[i].CopyFromArray(b.ToArray(), b.Count); 
+                quad[i].CopyFromArray(b.ToArray(), b.Count);
             }
 
 
 
-            return new List<byte[]> { quad[0].Data,quad[1].Data, quad[2].Data,quad[3].Data, };
+            return new List<byte[]> { quad[0].Data, quad[1].Data, quad[2].Data, quad[3].Data, };
         }
 
         public static List<byte[]> Buffer2Quad(byte[] buff, int width, int height)

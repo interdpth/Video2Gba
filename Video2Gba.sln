@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GritSharp", "..\GritSharp\G
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GritNative", "..\GritNative\GritNative.vcxproj", "{2A3A9974-6A92-4EE6-9295-667BC7A7CC3E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ntrcomp", "..\ntrcomp\ntrcomp.vcxproj", "{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -77,6 +79,16 @@ Global
 		{2A3A9974-6A92-4EE6-9295-667BC7A7CC3E}.Release|x64.Build.0 = Release|x64
 		{2A3A9974-6A92-4EE6-9295-667BC7A7CC3E}.Release|x86.ActiveCfg = Release|Win32
 		{2A3A9974-6A92-4EE6-9295-667BC7A7CC3E}.Release|x86.Build.0 = Release|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Debug|x64.ActiveCfg = Debug|x64
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Debug|x64.Build.0 = Debug|x64
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Debug|x86.ActiveCfg = Debug|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Debug|x86.Build.0 = Debug|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Release|Any CPU.ActiveCfg = Release|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Release|x64.ActiveCfg = Release|x64
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Release|x64.Build.0 = Release|x64
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Release|x86.ActiveCfg = Release|Win32
+		{18FE6C94-F1DD-48EF-A1C4-890D35319AE2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
