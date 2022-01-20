@@ -184,10 +184,10 @@ namespace Video2Gba
 
         public void Write16(ushort val)
         {
-            if (pos % 2 != 0)
-            {
-                Write8(0);
-            }
+            //if (pos % 2 != 0)
+            //{
+            //    Write8(0);
+            //}
             if (pos + 2 > length)
             {
                 length = pos + 2;

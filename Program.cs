@@ -211,45 +211,72 @@ namespace Video2Gba
 
             IOStream tmp = new IOStream(0);
 
-            //encoded should 0x64: 64 bytes
-            for(int i = 0;i<240*160*4;i++)
+            ////////encoded should 0x64: 64 bytes
+            for (int i = 0; i < 240 * 160 * 4; i++)
             {
-                Random sel = new Random(i);
+                tmp.Write16(0);
+                //Random sel = new Random(i * 0x3E3C);
 
-                int selec = sel.Next(0, 256);
-                if(selec%2==0)
-                {
-                    int randomValue = sel.Next(0,255);
-                    for (int z = 0; z < 32; z++)
-                    {
-                    
-                        tmp.Write8((byte)randomValue);
-                        i++;
-                    }
-                }
-                else
-                {
-                 
-                    for (int z = 0; z < 32; z++)
-                    {
-                        int randomValue = sel.Next(0, 255);
-                        tmp.Write8((byte)randomValue);
-                        i++;
-                    }
-                }
+                //int selec = sel.Next(0, 0xFFFF);
+                //if (selec % 2 == 0)
+                //{
+                //    int randomValue = sel.Next(0, 0xFFFF);
+                //    for (int z = 0; z < 32; z++)
+                //    {
+
+                //        tmp.Write16((byte)randomValue);
+                //        i++;
+                //    }
+                //}
+                //else
+                //{
+
+                //    for (int z = 0; z < 32; z++)
+                //    {
+                //        int randomValue = sel.Next(0, 0xFFFF);
+                //        tmp.Write16((byte)randomValue);
+                //        i++;
+                //    }
+                //}
             }
 
-            //buffer will be 64 bytes
 
-            //return should be RLE flag | shortsize (0x10) and 1 0x3232
-            //0x20, bytes....
-            //A0, 0x3232
-            //Outcome should be...1+1+4+0x20=0x26 bytes
+            //int rand = 0xFE;
+            ////0xFE 00 0x2 00
+            //for (int i = 0; i < 32; i++)
+            //{
+            //    for (int j = 0; j < 8; j++)
+            //    {
+            //        rand = new Random(rand * (1 + i) * j).Next(0x1000, 0xFFFF);
 
-            //new buffer will be 2+2+2+32 bytes = 38
+            //        tmp.Write16((ushort)rand);
+            //    }
+
+            //    //  RLE16
+            //    rand = new Random(rand * (1 + i)).Next(0x1000, 0xFFFF);
+            //    int tryagain = rand;
+            //    for (int j = 0; j < 4; j++)
+            //    {
+            //        tmp.Write16((ushort)rand);
+            //    }
+            //    // RAW
+            //    for (int j = 0; j < 4; j++)
+            //    {
+            //        rand = new Random(rand * (1 + i) * j).Next(0x1000, 0xFFFF);
+
+            //        tmp.Write16((ushort)rand);
+            //    }
+            //    //POINTER
+            //    for (int j = 0; j < 4; j++)
+            //    {
+            //        tmp.Write16((ushort)tryagain);
+            //    }
+            //}
+
             byte[] compresssed;
             byte[] uncompressed;
 
+            //0x8a | whatever
             using (var comp = new GbaNativeCompression(tmp.Data))
             {
                 compresssed = comp.CustomCompresssRLE16();
@@ -259,6 +286,16 @@ namespace Video2Gba
             {
                 uncompressed = comp.CustomDecompresssRLE16();
             }
+
+            for (int iz = 0; iz < tmp.Data.Length; iz++)
+            {
+                if (tmp.Data[iz] != uncompressed[iz])
+                {
+                    throw new Exception("lol");
+                }
+            }
+
+
 
             var b = ((1.0) / 280806);
             var b2 = Convert.ToUInt32(b);
@@ -312,42 +349,42 @@ namespace Video2Gba
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 160x128 {Processing}/tmp%03d.png" };
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -s 240x160 {Processing}/tmp%03d.png" };
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            //FInal file
-            // ffmpeg - i input.mp4 output.mp4
+            ////FInal file
+            //// ffmpeg - i input.mp4 output.mp4
 
-            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
-            //P = Process.Start(PSI);
-            //P.WaitForExit();
+            ////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
+            ////P = Process.Start(PSI);
+            ////P.WaitForExit();
 
-            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
-            //P = Process.Start(PSI);
-            //P.WaitForExit();
+            ////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
+            ////P = Process.Start(PSI);
+            ////P.WaitForExit();
 
-            //Read in the file.
+            ////Read in the file.
 
-            //byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
+            ////byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
 
 
-            //ROM.MakeSource("ALIEtest", video, $"{OutputFolder}");
-            //ROM.Write($"{OutputFolder}", "Alietest");
-            //return;
+            ////ROM.MakeSource("ALIEtest", video, $"{OutputFolder}");
+            ////ROM.Write($"{OutputFolder}", "Alietest");
+            ////return;
             //List<string> images = Directory.GetFiles(Processing).ToList().Where(x => x.Contains("png")).ToList();
             //images = images.OrderBy(x => Convert.ToInt32(new FileInfo(x).Name.Replace(".png", "").Replace("tmp", ""))).ToList();
 
-            //////     var k2 = images.OrderBy(x => Convert.ToInt32(x.Replace($"{Processing}\\tmp", "").Replace(".png", ""))).ToList();
-            ////     List<Thread> conversions = new List<Thread>();
-            ////     List<Thread> bgconversions = new List<Thread>();
-            ////     int dumblock = 0;
+            ////////     var k2 = images.OrderBy(x => Convert.ToInt32(x.Replace($"{Processing}\\tmp", "").Replace(".png", ""))).ToList();
+            //////     List<Thread> conversions = new List<Thread>();
+            //////     List<Thread> bgconversions = new List<Thread>();
+            //////     int dumblock = 0;
             //GritSharp.GritSharp s = new GritSharp.GritSharp();
 
-            ////////     //Dump files.
-            ////////     //So what we're going to is pretty simple. 
-            ////////     //GEt all the data
-            ////////     IOStream compressedData = new IOStream();
+            //////////     //Dump files.
+            //////////     //So what we're going to is pretty simple. 
+            //////////     //GEt all the data
+            //////////     IOStream compressedData = new IOStream();
 
             //for (int a = 0; a < images.Count; a++)
             //{

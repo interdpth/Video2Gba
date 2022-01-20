@@ -34,12 +34,11 @@ namespace Video2Gba
         [DllImport(@"ntrcomp.dll")]
         private static extern UInt32 OneDCompRead(IntPtr srcp, UInt32 size);
 
-
         [DllImport(@"ntrcomp.dll")]
         private static extern UInt32 RLCustomCompress16(IntPtr srcp, UInt32 size, IntPtr dstp);
+
         [DllImport(@"ntrcomp.dll")]
         private static extern UInt32 RLCustomDecompress16(IntPtr srcp, UInt32 size, IntPtr dstp);
-
 
 
         [DllImport("kernel32.dll", EntryPoint = "RtlFillMemory", SetLastError = false)]
@@ -54,9 +53,9 @@ namespace Video2Gba
         {
             //Ready the buffers!
             srcLength = srca.Length;
-            decompBuffer = Marshal.AllocCoTaskMem(srcLength * 16);
-            FillMemory(decompBuffer, (uint)(srcLength * 16), 0);
-            srcp = Marshal.AllocCoTaskMem(srcLength * 16);
+            decompBuffer = Marshal.AllocCoTaskMem(240 * 160 *16);//srcLength * 16);
+            FillMemory(decompBuffer, (uint)(240 * 160 * 16), 0);
+            srcp = Marshal.AllocCoTaskMem(srcLength * 1025);
             FillMemory(srcp, (uint)(srcLength * 16), 0);
             Marshal.Copy(srca, 0, srcp, srcLength);
             newFramep = IntPtr.Zero;
@@ -73,7 +72,7 @@ namespace Video2Gba
 
         public byte[] Lz77Deompress()
         {
-            compressedSize = LZCompRead(srcp + 4, (uint)srcLength - 4, decompBuffer);
+            compressedSize = LZCompRead(srcp, (uint)srcLength, decompBuffer);
             return SetData();
         }
 
@@ -93,15 +92,12 @@ namespace Video2Gba
 
         public byte[] RleDecompress()
         {
-            compressedSize = RLCompRead(srcp + 4, (uint)srcLength - 4, decompBuffer);
+            compressedSize = 0;//RLCompRead(srcp + 4, (uint)srcLength - 4, decompBuffer);
             return SetData();
         }
 
         public byte[] Rle16Decompress()
         {
-            //compressedSize = RLCompRead16(srcp + 4, (uint)srcLength-4, decompBuffer);
-            // return SetData();
-
             return CustomDecompresssRLE16();
         }
 
@@ -167,7 +163,6 @@ namespace Video2Gba
         public byte[] SetDataFromSelf()
         {
             if (compressedSize == 0) ThrowAss();
-
             //Make a new return buffer
 
             byte[] newBuffer = new byte[compressedSize];
@@ -177,13 +172,17 @@ namespace Video2Gba
 
         public byte[] CustomCompresssRLE16()
         {
-            compressedSize = RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
+            var dat= new RLE16(srcp, srcLength, true);
+            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
+            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int) compressedSize);
             return SetData();
         }
 
         public byte[] CustomDecompresssRLE16()
         {
-            compressedSize = RLCustomDecompress16(srcp, (uint)srcLength, decompBuffer);
+            var dat = new RLE16(srcp, srcLength, false);
+            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
+            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int)compressedSize);
             return SetData();
         }
     }

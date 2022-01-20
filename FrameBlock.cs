@@ -5,11 +5,11 @@ namespace Video2Gba
     public class FrameBlock : Container
     {
         public CompressionHeaders header;
-
-        public FrameBlock(byte hdr, long id, byte[] rawDataz = null, int theIndex = -1) : base(id, rawDataz, theIndex, true)
+        public bool LzComp = false;
+        public FrameBlock(byte hdr, long id, bool lzcompressed, byte[] rawDataz = null, int theIndex = -1) : base(id, rawDataz, theIndex, true)
         {
             header = (CompressionHeaders)hdr;
-
+            LzComp = lzcompressed;
             Decompress();
         }
 
@@ -45,19 +45,19 @@ namespace Video2Gba
             }
 
 
-            try
-            {
-                using (var comp = new GbaNativeCompression(rawData))
-                {
-                    rlComp = comp.RleCompress();
-                }
-            }
-            catch (Exception e)
-            {
-                //Compression was bad. 
-                rlComp = null;
-                Console.WriteLine("Bad data");
-            }
+            //try
+            //{
+            //    using (var comp = new GbaNativeCompression(rawData))
+            //    {
+            //        rlComp = comp.RleCompress();
+            //    }
+            //}
+            //catch (Exception e)
+            //{
+            //    //Compression was bad. 
+            //    rlComp = null;
+            //    Console.WriteLine("Bad data");
+            //}
 
 
             try
@@ -114,10 +114,10 @@ namespace Video2Gba
 
             if (rlComp != null && rlComp.Length < bestSize)
             {
-                bestBuffer = rlComp;
-                bestSize = rlComp.Length;
-                changed = true;
-                header = CompressionHeaders.RLEHEADER;
+                //bestBuffer = rlComp;
+                //bestSize = rlComp.Length;
+                //changed = true;
+                //header = CompressionHeaders.RLEHEADER;
             }
             if (rlComp16 != null && rlComp16.Length < bestSize)
             {
@@ -134,22 +134,31 @@ namespace Video2Gba
 
         private void Decompress()
         {
+            var newData = Data;
+            if(LzComp)
+            {
+                using (var comp = new GbaNativeCompression(newData))
+                {
+                    newData = comp.Lz77Deompress();
+                }
+            }
+
             switch (header)
             {
                 case CompressionHeaders.LZCOMPRESSEDHEADER:
-                    using (var comp = new GbaNativeCompression(Data))
+                    using (var comp = new GbaNativeCompression(newData))
                     {
                         OGData = comp.Lz77Deompress();
                     }
                     break;
                 case CompressionHeaders.RLEHEADER:
-                    using (var comp = new GbaNativeCompression(Data))
+                    using (var comp = new GbaNativeCompression(newData))
                     {
                         OGData = comp.RleDecompress();
                     }
                     break;
                 case CompressionHeaders.RLEHEADER16:
-                    using (var comp = new GbaNativeCompression(Data))
+                    using (var comp = new GbaNativeCompression(newData))
                     {
                         OGData = comp.Rle16Decompress();
                     }
@@ -162,7 +171,7 @@ namespace Video2Gba
 
             //other wise we have the 1d data
 
-            using (var comp = new GbaNativeCompression(Data))
+            using (var comp = new GbaNativeCompression(OGData))
             {
                 OGData = comp.From1D();
             }
