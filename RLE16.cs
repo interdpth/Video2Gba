@@ -131,13 +131,14 @@ namespace Video2Gba
             while (dat.Count != 0)
             {
                 byte currentDump = 0;
-                if (dat.Count > 254)
+                if (dat.Count > 252)
                 {
-                    currentDump = 254;
+                    currentDump = 252;
                 }
                 else
                 {
                     currentDump = (byte)dat.Count;
+                    if (currentDump == 1) return;//stop writing. allow this this to be consumed lol
                 }
                 //Get our valid range.
                 var currentRange = dat.GetRange(0, currentDump);
@@ -182,12 +183,19 @@ namespace Video2Gba
                         dat.RemoveAt(dat.Count - 1);
                         ProcessData(wasRle);//Dump the non RLE data
                         dat.Add(cur);
+
+                        //Hey is the next one the same? 
+                        ushort next = (ushort)Marshal.ReadInt16(srcp);
+                        if(next == cur)
+                        {
+                            dat.Add(cur); srcp += 2; processsed += 2;
+                        }
                     }
                     isRle = true;
                 }
 
 
-                if (dat.Count > 254)
+                if (dat.Count > 252)
                 {
                     ProcessData(isRle);
                 }

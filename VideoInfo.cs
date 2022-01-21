@@ -619,8 +619,8 @@ namespace Video2Gba
             for (int frameBlock = 0; frameBlock < frameBlockSize; frameBlock++)
             {
                 byte compressheader = movieFIle.Read8();
-                int index = movieFIle.Read32();
                 int id = movieFIle.Read32();
+                int index = movieFIle.Read32();
                 int datalen = movieFIle.Read32();
                 byte datacompressed = movieFIle.Read8();
                 byte[] data = new byte[datalen];
@@ -643,11 +643,15 @@ namespace Video2Gba
             {
                 var old = oldFrameBlocks[i];
                 var newb = blocks[i];
-
+                if(newb.header == Video2Gba.CompressionHeaders.LZCOMPRESSEDHEADER)
+                {
+                    Console.WriteLine("lol");
+                }
                 if (old.ID != newb.ID) throw new Exception("Ids don't match");
 
                 if (old.Index != newb.Index) throw new Exception("indexes do not match");
                 if (old.Length != newb.Length) throw new Exception("Length does not match");
+                if (old.OGData.Length != newb.OGData.Length) throw new Exception("OGLength does not match");
                 old.GetCheckSum();
                 newb.GetCheckSum();
                 if (old.CheckSum != newb.CheckSum) throw new Exception("Checksums don't match");

@@ -15,13 +15,13 @@ namespace Video2Gba
 
         public FrameBlock(long id, byte[] rawDataz = null, int theIndex = -1) : base(id, rawDataz, theIndex)
         {
-            byte[] rawData = null;
+            byte[] rawData = rawDataz;
             int oldSize = rawDataz.Length;
 
-            using (var comp = new GbaNativeCompression(rawDataz))
-            {
-                rawData = comp.Set1D();
-            }
+            //using (var comp = new GbaNativeCompression(rawDataz))
+            //{
+            //    rawData = comp.Set1D();
+            //}
             int DSize = rawData.Length;
             byte[] lzComp = null;
             byte[] rlComp = null;
@@ -102,15 +102,15 @@ namespace Video2Gba
             int bestSize = Data.Length;
             byte[] bestBuffer = Data;
             bool changed = false;
-            if (lzComp != null && lzComp.Length < bestSize)
-            {
-                bestBuffer = lzComp;
-                bestSize = lzComp.Length;
-                changed = true;
+            //if (lzComp != null && lzComp.Length < bestSize)
+            //{
+            //    bestBuffer = lzComp;
+            //    bestSize = lzComp.Length;
+            //    changed = true;
 
 
-                header = CompressionHeaders.LZCOMPRESSEDHEADER;
-            }
+            //    header = CompressionHeaders.LZCOMPRESSEDHEADER;
+            //}
 
             if (rlComp != null && rlComp.Length < bestSize)
             {
@@ -171,10 +171,10 @@ namespace Video2Gba
 
             //other wise we have the 1d data
 
-            using (var comp = new GbaNativeCompression(OGData))
-            {
-                OGData = comp.From1D();
-            }
+            //using (var comp = new GbaNativeCompression(OGData))
+            //{
+            //    OGData = comp.From1D();
+            //}
             GetCheckSum();
             //Used for data from disk.
         }

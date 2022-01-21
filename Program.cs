@@ -211,38 +211,38 @@ namespace Video2Gba
 
             IOStream tmp = new IOStream(0);
 
-            ////////encoded should 0x64: 64 bytes
-            for (int i = 0; i < 240 * 160 * 4; i++)
-            {
-                tmp.Write16(0);
-                //Random sel = new Random(i * 0x3E3C);
+            //////////encoded should 0x64: 64 bytes
+            //for (int i = 0; i < 240 * 160 * 4; i++)
+            //{
+            //    tmp.Write16(0);
+            //    Random sel = new Random(i * 0x3E3C);
 
-                //int selec = sel.Next(0, 0xFFFF);
-                //if (selec % 2 == 0)
-                //{
-                //    int randomValue = sel.Next(0, 0xFFFF);
-                //    for (int z = 0; z < 32; z++)
-                //    {
+            //    int selec = sel.Next(0, 0xFFFF);
+            //    if (selec % 2 == 0)
+            //    {
+            //        int randomValue = sel.Next(0, 0xFFFF);
+            //        for (int z = 0; z < 32; z++)
+            //        {
 
-                //        tmp.Write16((byte)randomValue);
-                //        i++;
-                //    }
-                //}
-                //else
-                //{
+            //            tmp.Write16((byte)randomValue);
+            //            i++;
+            //        }
+            //    }
+            //    else
+            //    {
 
-                //    for (int z = 0; z < 32; z++)
-                //    {
-                //        int randomValue = sel.Next(0, 0xFFFF);
-                //        tmp.Write16((byte)randomValue);
-                //        i++;
-                //    }
-                //}
-            }
+            //        for (int z = 0; z < 32; z++)
+            //        {
+            //            int randomValue = sel.Next(0, 0xFFFF);
+            //            tmp.Write16((byte)randomValue);
+            //            i++;
+            //        }
+            //    }
+            //}
 
 
             //int rand = 0xFE;
-            ////0xFE 00 0x2 00
+            //////0xFE 00 0x2 00
             //for (int i = 0; i < 32; i++)
             //{
             //    for (int j = 0; j < 8; j++)
@@ -273,27 +273,27 @@ namespace Video2Gba
             //    }
             //}
 
-            byte[] compresssed;
-            byte[] uncompressed;
+            //byte[] compresssed;
+            //byte[] uncompressed;
 
-            //0x8a | whatever
-            using (var comp = new GbaNativeCompression(tmp.Data))
-            {
-                compresssed = comp.CustomCompresssRLE16();
-            }
+            ////0x8a | whatever
+            //using (var comp = new GbaNativeCompression(tmp.Data))
+            //{
+            //    compresssed = comp.Set1D();
+            //}
 
-            using (var comp = new GbaNativeCompression(compresssed))
-            {
-                uncompressed = comp.CustomDecompresssRLE16();
-            }
+            //using (var comp = new GbaNativeCompression(compresssed))
+            //{
+            //    uncompressed = comp.Set1D();
+            //}
 
-            for (int iz = 0; iz < tmp.Data.Length; iz++)
-            {
-                if (tmp.Data[iz] != uncompressed[iz])
-                {
-                    throw new Exception("lol");
-                }
-            }
+            //for (int iz = 0; iz < tmp.Data.Length; iz++)
+            //{
+            //    if (tmp.Data[iz] != uncompressed[iz])
+            //    {
+            //        throw new Exception("lol");
+            //    }
+            //}
 
 
 
