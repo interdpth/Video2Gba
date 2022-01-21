@@ -398,7 +398,7 @@ namespace Video2Gba
         {
             //Write frame blocks.
             newFile.WriteU32((uint)frameBlocks.Count);
-     
+
             for (int frameBlock = 0; frameBlock < frameBlocks.Count; frameBlock++)
             {
                 var fb = frameBlocks[frameBlock];
@@ -416,7 +416,7 @@ namespace Video2Gba
 
                     if (newDAta.Length < compressBlocks.Data.Length)
                     {
-                      
+
                         newFile.Write8(0xFF);
                         long start = newFile.Position;
                         foreach (byte b in newDAta)
@@ -436,7 +436,7 @@ namespace Video2Gba
 
                         realSize = end - start;
                     }
-                
+
                 }
                 long curPos = newFile.Position;
                 newFile.Position = lenPointer;
@@ -469,7 +469,7 @@ namespace Video2Gba
             //240x160
             //160x128 
             int idBase = 0;
-            int blockWidth =240/16;
+            int blockWidth = 240 / 16;
             int blockHeight = 160;
 
 
@@ -508,7 +508,7 @@ namespace Video2Gba
             string header = "WHID.";
 
             int screenSize = 4 * sceens[0].ContainerIDs.Count * sceens.Count;
-            IOStream newFile = new IOStream(nsize + 12 + header.Length + 1 + screenSize + Files.Count*4);
+            IOStream newFile = new IOStream(nsize + 12 + header.Length + 1 + screenSize + Files.Count * 4);
             newFile.WriteASCII(header);
             newFile.Write8(20);
             newFile.Write8((byte)blockWidth);
@@ -526,6 +526,7 @@ namespace Video2Gba
             foreach (var cf in sceens)
             {
                 idByOffset[cf.Key] = (int)newFile.Position;
+                newFile.Write32((int)cf.Key);
                 foreach (var e in cf.Value.ContainerIDs)
                 {
                     newFile.Write32(e);
@@ -555,7 +556,7 @@ namespace Video2Gba
 
             byte[] newArray = new byte[endOfFile];
             Array.Copy(newFile.Data, newArray, endOfFile);
-           File.WriteAllBytes($"whidglecodec{blockWidth}x{blockHeight}_full", newArray);
+            File.WriteAllBytes($"whidglecodec{blockWidth}x{blockHeight}_full", newArray);
             long newSize = GetSize();
 
             Console.WriteLine($"New size {newSize}");
@@ -566,7 +567,7 @@ namespace Video2Gba
             DecompressAndTest(frameBlocks, sceens, $"whidglecodec{blockWidth}x{blockHeight}_full");
         }
 
-        void DecompressAndTest(List<FrameBlock> oldFrameBlocks, Dictionary<long, CustomFrame> oldScreens, string tstfile)
+        void DecompressAndTest(List<FrameBlock> oldFrameBlocks, Dictionary<long, CustomFrame> oldScreens, List<int> offsetlist, string tstfile)
         {
             long oldSize = GetSize();
             List<long> fixedList = new List<long>();
@@ -626,7 +627,7 @@ namespace Video2Gba
                 byte[] data = new byte[datalen];
                 Array.Copy(movieFIle.Data, movieFIle.Position, data, 0, datalen);
                 movieFIle.Position += datalen;
-                FrameBlock newBlock = new FrameBlock(compressheader, id, datacompressed==0xFF, data, index);
+                FrameBlock newBlock = new FrameBlock(compressheader, id, datacompressed == 0xFF, data, index);
                 blocks.Add(newBlock);
             }
 
@@ -643,7 +644,7 @@ namespace Video2Gba
             {
                 var old = oldFrameBlocks[i];
                 var newb = blocks[i];
-                if(newb.header == Video2Gba.CompressionHeaders.LZCOMPRESSEDHEADER)
+                if (newb.header == Video2Gba.CompressionHeaders.LZCOMPRESSEDHEADER)
                 {
                     Console.WriteLine("lol");
                 }
@@ -660,7 +661,69 @@ namespace Video2Gba
 
             movieFIle.Position = screenPointer;
 
+            int count = movieFIle.Read32();
+            int numper = movieFIle.Read16();
+            for (int screenCounter = 0; screenCounter < count; screenCounter++)
+            {
+                CustomFrame list = new CustomFrame();
+                int key = movieFIle.Read32();
+                for (int idCount = 0; idCount < numper; idCount++)
+                {
+                    list.ContainerIDs.Add(movieFIle.Read32());
+                }
+                sceens[key] = list;
+            }
 
+
+            if (oldScreens.Count != count) throw new Exception("Screen count don't match");
+            if (numper != oldScreens[0].ContainerIDs.Count) throw new Exception("Screens per Screen match does not match");
+
+            //make sure all match
+            var m1 = oldScreens.Keys.OrderBy(x => x).ToList();
+            var m2 = sceens.Keys.OrderBy(x => x).ToList();
+
+            for (int keyCheck = 0; keyCheck < m1.Count(); keyCheck++)
+            {
+                if (m1[keyCheck] != m2[keyCheck]) throw new Exception("Mismatch");
+            }
+            //Compare
+            
+            
+            for (int keyCheck = 0; keyCheck < m1.Count(); keyCheck++)
+            {
+                var tmp = m1[keyCheck];
+                var c1 = oldScreens[tmp];
+                var c2 = sceens[tmp];
+
+                for(int i = 0; i<c1.ContainerIDs.Count;i++)
+                {
+                    if(c1.ContainerIDs[i]!=c2.ContainerIDs[i])
+                    {
+                        throw new Exception("Screens aren't right.");
+                    }
+                }              
+            }
+
+            //Okay, just check the frames.
+            movieFIle.Position = framesPointer;
+            int len = movieFIle.Read32();
+            List<int> offsets = new List<int>();
+            for(int i =0;i<len;i++)
+            {
+                offsets.Add(movieFIle.Read32());
+            }
+
+
+            for(int i =0;i< offsetlist.Count;i++)
+            {
+                if (offsets[i] != offsetlist[i]) throw new Exception("Offsets failed to validate");
+            }
+
+            Console.WriteLine("Succesfully validated");
+            //Check against
+
+
+            //Read in all the frames. 
             /*
                 newFile.Write32(sceens.Count);
             newFile.Write16((ushort)sceens[0].ContainerIDs.Count);
@@ -677,10 +740,10 @@ namespace Video2Gba
              * 
              */
             //CheckBlocks();
-            int screenCount = movieFIle.Read32();
-            int numOfBlocksInScreen = movieFIle.Read16();
 
 
+
+            Dictionary<string, Container> Files = new Dictionary<string, Container>();
             long newSize = GetSize();
 
             Console.WriteLine($"New size {newSize}");
