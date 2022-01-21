@@ -536,11 +536,13 @@ namespace Video2Gba
             newFile.Write32(0xFFFFFFF);//screens and frame pointers
             int framePositions = (int)newFile.Position;
             newFile.Write32(Files.Count);
+
+            List<int> offsetz = new List<int>();
             //Frame count will not match 
             foreach (var files in Files)
             {
                 int offset = idByOffset[files.Value.IsData() ? files.Value.ID : files.Value.Index];
-
+                offsetz.Add(offset);
                 newFile.Write32(offset);
             }
             long endOfFile = newFile.Position;
@@ -564,7 +566,7 @@ namespace Video2Gba
             Console.WriteLine($"Comp2 done");
 
 
-            DecompressAndTest(frameBlocks, sceens, $"whidglecodec{blockWidth}x{blockHeight}_full");
+            DecompressAndTest(frameBlocks, sceens, offsetz, $"whidglecodec{blockWidth}x{blockHeight}_full");
         }
 
         void DecompressAndTest(List<FrameBlock> oldFrameBlocks, Dictionary<long, CustomFrame> oldScreens, List<int> offsetlist, string tstfile)
@@ -722,28 +724,12 @@ namespace Video2Gba
             Console.WriteLine("Succesfully validated");
             //Check against
 
-
-            //Read in all the frames. 
-            /*
-                newFile.Write32(sceens.Count);
-            newFile.Write16((ushort)sceens[0].ContainerIDs.Count);
-            Dictionary<long, int> idByOffset = new Dictionary<long, int>();
-            foreach (var cf in sceens)
+            for(int i =0; i<offsetlist.Count;i++)
             {
-                idByOffset[cf.Key] = (int)newFile.Position;
-                foreach (var e in cf.Value.ContainerIDs)
-                {
-                    newFile.Write32(e);
-                }
-            } 
-             
-             * 
-             */
-            //CheckBlocks();
+
+            }
 
 
-
-            Dictionary<string, Container> Files = new Dictionary<string, Container>();
             long newSize = GetSize();
 
             Console.WriteLine($"New size {newSize}");
