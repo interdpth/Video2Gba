@@ -69,223 +69,128 @@ namespace Video2Gba
             Console.WriteLine($"Comp1 done");
 
         }
-        public void Encoder()
+
+        public int GetIndex(List<FrameBlock> frameBlocks, FrameBlock newFrame)
         {
-            long oldSize = GetSize();
-            List<long> fixedList = new List<long>();
-            Container lastFrame = null;
-
-            Container GetContainerAsData(long ID)
+            int index = -1;
+            for (int i = 0; i < frameBlocks.Count; i++)
             {
-                var blah = Files.Where(x => x.Value.ID == ID && x.Value.IsData()).FirstOrDefault();
-
-                return blah.Value;
-
+                FrameBlock comp = frameBlocks[i];
+                if (comp.CheckSum == newFrame.CheckSum)
+                {
+                    //yay, we have a match.
+                    index = i;
+                    break;
+                }
             }
-            foreach (var frame in Files.Where(x => x.Value.IsData()))
-            {
-                bool keyFrame = true;
-                byte[] rawData = frame.Value.Data;
-                byte[] lzComp = null;
-                byte[] rlComp = null;
-                byte[] rlComp16 = null;
-                byte[] diff8 = null;
-                byte[] diff16 = null;
-                byte[] huff = null;
-                try
-                {
-                    using (var comp = new GbaNativeCompression(rawData))
-                    {
-                        huff = comp.HuffCompress();
-                    }
-                }
-                catch (Exception e)
-                {
-                    //Compression was bad. 
-                    huff = null;
-                    Console.WriteLine("Bad data");
-                }
-                try
-                {
-                    using (var comp = new GbaNativeCompression(rawData))
-                    {
-                        lzComp = comp.Lz77Compress();
-                    }
-                }
-                catch (Exception e)
-                {
-                    //Compression was bad. 
-                    lzComp = null;
-                    Console.WriteLine("Bad data");
-                }
 
-
-                if (lastFrame != null && (frame.Value.ID - lastFrame.ID) == 1) //We can only differ if id - id =1 
-                {
-                    var lastFrameReal = GetContainerAsData(lastFrame.ID);
-
-                    try
-                    {
-                        using (var comp = new GbaNativeCompression(lastFrameReal.OGData, rawData))
-                        {
-                            diff8 = comp.Differ8Compress();
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        //Compression was bad. 
-                        diff8 = null;
-                        Console.WriteLine("Bad data");
-                    }
-
-                    try
-                    {
-
-                        using (var comp = new GbaNativeCompression(lastFrameReal.OGData, rawData))
-                        {
-                            diff16 = comp.Differ16Compress();
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        //Compression was bad. 
-                        diff16 = null;
-                        Console.WriteLine("Bad data");
-                    }
-                }
-
-                try
-                {
-                    using (var comp = new GbaNativeCompression(rawData))
-                    {
-                        rlComp16 = comp.Rle16Compress();
-
-                    }
-                }
-                catch (Exception e)
-                {
-                    //Compression was bad. 
-                    rlComp16 = null;
-                    Console.WriteLine("Bad data");
-                }
-
-                try
-                {
-                    using (var comp = new GbaNativeCompression(rawData))
-                    {
-                        rlComp = comp.RleCompress();
-
-                    }
-                }
-                catch (Exception e)
-                {
-                    //Compression was bad. 
-                    rlComp = null;
-                    Console.WriteLine("Bad data");
-                }
-                //IOStream outbuffer = new IOStream();
-                //VideoCompression.RleCompress(new IOStream(frame.Value.Data), ref outbuffer);
-                //byte[] rlComp = outbuffer.Data;
-
-                int bestSize = frame.Value.Data.Length;
-                byte[] bestBuffer = frame.Value.Data;
-                bool changed = false;
-                if (lzComp != null && lzComp.Length < bestSize)
-                {
-                    bestBuffer = lzComp;
-                    bestSize = lzComp.Length;
-                    changed = true;
-                }
-
-                if (rlComp != null && rlComp.Length < bestSize)
-                {
-                    bestBuffer = rlComp;
-                    bestSize = rlComp.Length;
-                    changed = true;
-                }
-                if (rlComp16 != null && rlComp16.Length < bestSize)
-                {
-                    bestBuffer = rlComp16;
-                    bestSize = rlComp16.Length;
-                    changed = true;
-                }
-                if (diff8 != null && diff8.Length < bestSize)
-                {
-                    bestBuffer = diff8;
-                    bestSize = diff8.Length;
-                    changed = true;
-                    keyFrame = false;
-                }
-
-                if (diff16 != null && diff16.Length < bestSize)
-                {
-                    bestBuffer = diff16;
-                    bestSize = diff16.Length;
-                    changed = true;
-                    bestSize = bestBuffer.Length;
-                    keyFrame = false;
-                }
-
-                if (huff != null && huff.Length < bestSize)
-                {
-                    bestBuffer = huff;
-                    bestSize = huff.Length;
-                    changed = true;
-                }
-                //if (rlComp.Length < compressed.Length)
-                //{
-                //    compressed = rlComp;
-                //}
-                lastFrame = new Container(frame.Value);
-
-                using (var comp = new GbaNativeCompression(bestBuffer))
-                {
-                    bestBuffer = comp.Rle16Compress();
-                }
-
-                frame.Value.SetData(bestBuffer);
-
-            }
-            long newSize = GetSize();
-
-            Console.WriteLine($"New size {newSize}");
-            Console.WriteLine($"Bytes saved {oldSize - newSize}");
-
-            //Dump it in a huge file for analyzing
-
-            List<byte> fullFIle = new List<byte>();
-            Dictionary<long, int> frameOffsets = new Dictionary<long, int>();
-            List<int> rawOffset = new List<int>();
-
-            foreach (var files in Files)
-            {
-                int offset;
-                if (files.Value.IsData())
-                {
-                    offset = fullFIle.Count;
-                    frameOffsets[files.Value.ID] = fullFIle.Count;
-
-                    fullFIle.AddRange(files.Value.Data);
-
-                }
-                else
-                {
-                    offset = frameOffsets[files.Value.Index];
-                }
-                rawOffset.Add(offset);
-            }
-            List<byte> realFile = new List<byte>();
-
-            //write frame start
-            realFile.AddRange(BitConverter.GetBytes(rawOffset.Count));
-            foreach (var o in rawOffset)
-            {
-                realFile.AddRange(BitConverter.GetBytes(o));
-            }
-            realFile.AddRange(fullFIle);
-            File.WriteAllBytes("compressed.dat", fullFIle.ToArray());
-            Console.WriteLine($"Comp2 done");
+            return index;
         }
+
+        public void SetPixelBlock(int screenSize, int baseX, int baseY, int blockWidth, int blockHeight, ref short[] image, FrameBlock src)
+        {
+            for (int tmpX = 0; tmpX < blockWidth; tmpX++)
+            {
+                for (int tmpY = 0; tmpY < blockWidth; tmpY++)
+                {
+                    int trueX = tmpX + baseX;
+                    int trueY = tmpY + baseY;
+                    int pixel = trueX + trueY * screenSize;
+                    image[pixel] = src.OGData[tmpX + tmpY * blockWidth];
+                }
+            }
+        }
+
+        public byte[] GetPixelBlock(int screenSize, int baseX, int baseY, int blockWidth, int blockHeight, short[] newData)
+        {
+            //hello, get our pixel 
+            short[] buff = new short[blockWidth * blockHeight];
+
+            for (int tmpX = 0; tmpX < blockWidth; tmpX++)
+            {
+                for (int tmpY = 0; tmpY < blockWidth; tmpY++)
+                {
+                    int trueX = tmpX + baseX;
+                    int trueY = tmpY + baseY;
+                    int pixel = trueX + trueY * screenSize;
+
+                    buff[tmpX + tmpY * blockWidth] = newData[pixel];
+                }
+            }
+
+            byte[] tmp = new byte[buff.Length * 2];
+            Buffer.BlockCopy(buff, 0, tmp, 0, buff.Length * 2);
+            return tmp;
+        }
+
+        Dictionary<int, FrameBlock> loadedBlocks = new Dictionary<int, FrameBlock>();
+        CustomFrame lastFrame;
+        public void ClearBlocks(CustomFrame thisFrame)
+        {
+            var loadedKeys = loadedBlocks.Keys;
+            foreach (int key in loadedKeys)
+            {
+                if (!thisFrame.ContainerIDs.Contains(key))
+                {
+                    loadedBlocks.Remove(key);
+                }
+            }
+        }
+
+        //returns how many blocks are in use
+        private int CreateFromBlocks(List<FrameBlock> blocks, CustomFrame currentFrame, ref short[] image, int blockWidth, int blockHeight)
+        {
+            for (int i = 0; i < currentFrame.ContainerIDs.Count; i++)
+            {
+                if (lastFrame == null || lastFrame.ContainerIDs[i] != lastFrame.ContainerIDs[i])
+                {
+                    if (lastFrame == null)
+                    {
+                        lastFrame = currentFrame;//Only do it once.
+                    }
+
+                    //Get first block.
+
+                    int blockId = currentFrame.ContainerIDs[i];
+                    int blockCount = loadedBlocks.Count(x => x.Value.ID == blockId);
+                    if (blockCount == 0)
+                    {
+                        //Do we have more blocks loaded then needed 
+
+                        if (loadedBlocks.Count > currentFrame.ContainerIDs.Count)
+                        {
+                            //Clear our blocks we don't need. 
+                            ClearBlocks(currentFrame);
+                        }
+                        var possibleBlocks = blocks.Where(x => x.ID == blockId);
+
+                        loadedBlocks[blockId] = possibleBlocks.First();
+                        //Load up into an empty slot 
+
+
+                        //Make sure that we are not already loaded.
+                    }
+
+                    //Calc base x and base y
+
+
+                    
+                                          //240x160
+                    int maxX = 240 / blockWidth;
+                    int maxY = 160 / blockHeight;
+              
+                    //y = i/MaxX
+                    //x = i%maxY
+                    //Now draw 
+                    int baseX = i % maxY;
+                    int baseY = i / maxX;
+                    SetPixelBlock(240, baseX, baseY, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
+                }
+            }
+            return loadedBlocks.Count;
+        }
+
+
 
         private List<FrameBlock> CreateFrameBlocks(int blockWidth, int blockHeight, ref int idBase, ref Dictionary<long, CustomFrame> frames)
         {
@@ -320,45 +225,22 @@ namespace Video2Gba
                     {
                         for (int y = 0; y < maxY; y++)
                         {
-                            //hello, get our pixel 
-                            short[] buff = new short[blockWidth * blockHeight];
 
-                            for (int tmpX = 0; tmpX < blockWidth; tmpX++)
-                            {
-                                for (int tmpY = 0; tmpY < blockWidth; tmpY++)
-                                {
-                                    int trueX = tmpX + x;
-                                    int trueY = tmpY + y;
-                                    int pixel = trueX + trueY * 240;
+                            byte[] tmp = GetPixelBlock(240, x, y, blockWidth, blockHeight, newData);
 
-                                    buff[tmpX + tmpY * blockWidth] = newData[pixel];
-                                }
-                            }
-
-                            byte[] tmp = new byte[buff.Length * 2];
-                            Buffer.BlockCopy(buff, 0, tmp, 0, buff.Length * 2);
                             FrameBlock newFrame = new FrameBlock(idBase, tmp);
 
                             //See if we have an id.
 
-                            int index = -1;
-                            for (int i = 0; i < frameBlocks.Count; i++)
-                            {
-                                FrameBlock comp = frameBlocks[i];
-                                if (comp.CheckSum == newFrame.CheckSum)
-                                {
-                                    //yay, we have a match.
-                                    index = i;
-                                    break;
-                                }
-                            }
+                            int index = GetIndex(frameBlocks, newFrame);
 
                             if (index == -1)
                             {
                                 frameBlocks.Add(newFrame);
 
                                 cf.ContainerIDs.Add(idBase);
-                                idBase++;
+
+                                index = idBase++;
                             }
                             else
                             {
@@ -371,26 +253,6 @@ namespace Video2Gba
             }
 
             return frameBlocks;
-        }
-
-
-        public int GetByteSizeForFrames(ref List<FrameBlock> frameBlocks, ref Dictionary<long, CustomFrame> frames)
-        {
-            int nsize = 8 + 4 + 4 + 4;
-            for (int frameBlock = 0; frameBlock < frameBlocks.Count; frameBlock++)
-            {
-                var fb = frameBlocks[frameBlock];
-                //header, id, index, length
-                nsize += 1 + 4 + 4 + 4 + (int)fb.Length;
-
-            }
-            foreach (var cf in frames)
-            {
-                nsize += cf.Value.ContainerIDs.Count * 4;
-            }
-            nsize += 4;
-            nsize += 4;
-            return nsize;
         }
 
 
@@ -449,17 +311,6 @@ namespace Video2Gba
         {
             long oldSize = GetSize();
             List<long> fixedList = new List<long>();
-
-
-
-
-
-
-            //HELLO THIS CAN GET COMPLICATRED MATT
-            //WE WILL BREAK THE SCREEN UP INTO 16x16 sections. 
-            //Once broken up, we will search for duplicates via containers. 
-            //Once everything is sorted. a frame will just represent those blocks. 
-
 
             Container lastFrame = null;
 
@@ -527,7 +378,7 @@ namespace Video2Gba
             {
                 idByOffset[cf.Key] = (int)newFile.Position;
                 newFile.Write32((int)cf.Key);
-                foreach (var e in cf.Value.ContainerIDs)
+                foreach (var e in cf.Value.ContainerIDs)//update to drop size
                 {
                     newFile.Write32(e);
                 }
@@ -689,43 +540,80 @@ namespace Video2Gba
                 if (m1[keyCheck] != m2[keyCheck]) throw new Exception("Mismatch");
             }
             //Compare
-            
-            
+
+
             for (int keyCheck = 0; keyCheck < m1.Count(); keyCheck++)
             {
                 var tmp = m1[keyCheck];
                 var c1 = oldScreens[tmp];
                 var c2 = sceens[tmp];
 
-                for(int i = 0; i<c1.ContainerIDs.Count;i++)
+                for (int i = 0; i < c1.ContainerIDs.Count; i++)
                 {
-                    if(c1.ContainerIDs[i]!=c2.ContainerIDs[i])
+                    if (c1.ContainerIDs[i] != c2.ContainerIDs[i])
                     {
                         throw new Exception("Screens aren't right.");
                     }
-                }              
+                }
             }
 
             //Okay, just check the frames.
             movieFIle.Position = framesPointer;
             int len = movieFIle.Read32();
             List<int> offsets = new List<int>();
-            for(int i =0;i<len;i++)
+            for (int i = 0; i < len; i++)
             {
                 offsets.Add(movieFIle.Read32());
             }
 
 
-            for(int i =0;i< offsetlist.Count;i++)
+            for (int i = 0; i < offsetlist.Count; i++)
             {
                 if (offsets[i] != offsetlist[i]) throw new Exception("Offsets failed to validate");
             }
 
             Console.WriteLine("Succesfully validated");
             //Check against
+            List<int> currentScreen = new List<int>();
+            short[] ScreenGFX = new short[240 * 160];
+            int lastoffset = 0;
 
-            for(int i =0; i<offsetlist.Count;i++)
+            for (int i = 0; i < offsetlist.Count; i++)
             {
+                //Let's form
+
+                //on the gba, we just iterate here, but we need to make sure it all works and it's loaded so..
+
+                //Get your screen
+                long lookup = offsetlist[i];
+
+                CustomFrame newScreen = null;
+
+                if (lookup != lastoffset)
+                {
+                    movieFIle.Position = lookup;
+                    //Read our key
+                    int key = movieFIle.Read32();
+                    newScreen = sceens[key];//If this works we're good to go.
+                                            //Begin the writing.
+
+                    CreateFromBlocks( blocks, newScreen,ref ScreenGFX, blockWidth, blockHeight);
+                    
+                    Console.WriteLine("lol");
+                    //What's loaded 
+
+                }
+
+
+                Container c = new Container((long)i, data: ScreenGFX);
+
+                //did it work D:
+
+
+
+
+
+
 
             }
 
@@ -736,6 +624,29 @@ namespace Video2Gba
             Console.WriteLine($"Bytes saved {oldSize - newSize}");
             Console.WriteLine($"Comp2 done");
         }
+
+
+        
+
+        public int GetByteSizeForFrames(ref List<FrameBlock> frameBlocks, ref Dictionary<long, CustomFrame> frames)
+        {
+            int nsize = 8 + 4 + 4 + 4;
+            for (int frameBlock = 0; frameBlock < frameBlocks.Count; frameBlock++)
+            {
+                var fb = frameBlocks[frameBlock];
+                //header, id, index, length
+                nsize += 1 + 4 + 4 + 4 + (int)fb.Length;
+
+            }
+            foreach (var cf in frames)
+            {
+                nsize += cf.Value.ContainerIDs.Count * 4;
+            }
+            nsize += 4;
+            nsize += 4;
+            return nsize;
+        }
+
     }
 
 }

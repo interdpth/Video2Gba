@@ -337,14 +337,14 @@ namespace Video2Gba
 
             //P.WaitForExit();
 
-            //float fps = (float)((float)fr / (float)targetFps);
-            //if (fps > 2.0 || fps < 0.5)
-            //{
-            //    Console.WriteLine("Range is bad, clamping value");
-            //    if (fps > 2.0f) fps = 2.0f;
-            //    if (fps < 0.5f) fps = 0.5f;
+            float fps = (float)((float)fr / (float)targetFps);
+            if (fps > 2.0 || fps < 0.5)
+            {
+                Console.WriteLine("Range is bad, clamping value");
+                if (fps > 2.0f) fps = 2.0f;
+                if (fps < 0.5f) fps = 0.5f;
 
-            //}
+            }
             //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 -af atempo={fps} {Processing}\\alie.wav" };
             //P = Process.Start(PSI);
             //P.WaitForExit();
@@ -353,38 +353,38 @@ namespace Video2Gba
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            ////FInal file
-            //// ffmpeg - i input.mp4 output.mp4
+            //////FInal file
+            ////// ffmpeg - i input.mp4 output.mp4
 
-            ////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
-            ////P = Process.Start(PSI);
-            ////P.WaitForExit();
+            //////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mp4 {Processing}\\alie.mpg" };
+            //////P = Process.Start(PSI);
+            //////P.WaitForExit();
 
-            ////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
-            ////P = Process.Start(PSI);
-            ////P.WaitForExit();
+            //////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\alie.mpg -s 240x160 -c:v mpeg1video -c:a mp2 -format mpeg -r 20 -ac 1 -b:a 32000 {OutputFolder}\\alie.mpg" };
+            //////P = Process.Start(PSI);
+            //////P.WaitForExit();
 
-            ////Read in the file.
+            //////Read in the file.
 
-            ////byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
+            //////byte[] video = File.ReadAllBytes($"{OutputFolder}\\alie.mpg");
 
 
-            ////ROM.MakeSource("ALIEtest", video, $"{OutputFolder}");
-            ////ROM.Write($"{OutputFolder}", "Alietest");
-            ////return;
+            //////ROM.MakeSource("ALIEtest", video, $"{OutputFolder}");
+            //////ROM.Write($"{OutputFolder}", "Alietest");
+            //////return;
             //List<string> images = Directory.GetFiles(Processing).ToList().Where(x => x.Contains("png")).ToList();
             //images = images.OrderBy(x => Convert.ToInt32(new FileInfo(x).Name.Replace(".png", "").Replace("tmp", ""))).ToList();
 
-            ////////     var k2 = images.OrderBy(x => Convert.ToInt32(x.Replace($"{Processing}\\tmp", "").Replace(".png", ""))).ToList();
-            //////     List<Thread> conversions = new List<Thread>();
-            //////     List<Thread> bgconversions = new List<Thread>();
-            //////     int dumblock = 0;
+            //////////     var k2 = images.OrderBy(x => Convert.ToInt32(x.Replace($"{Processing}\\tmp", "").Replace(".png", ""))).ToList();
+            ////////     List<Thread> conversions = new List<Thread>();
+            ////////     List<Thread> bgconversions = new List<Thread>();
+            ////////     int dumblock = 0;
             //GritSharp.GritSharp s = new GritSharp.GritSharp();
 
-            //////////     //Dump files.
-            //////////     //So what we're going to is pretty simple. 
-            //////////     //GEt all the data
-            //////////     IOStream compressedData = new IOStream();
+            ////////////     //Dump files.
+            ////////////     //So what we're going to is pretty simple. 
+            ////////////     //GEt all the data
+            ////////////     IOStream compressedData = new IOStream();
 
             //for (int a = 0; a < images.Count; a++)
             //{
@@ -442,10 +442,6 @@ namespace Video2Gba
             for (int a = 0; a < imgbins.Count; a++)
             {
                 string hey = imgbins[a];
-                // var t = new Thread(//
-                //     () =>
-                //{
-                //no we try now
 
                 try
                 {
