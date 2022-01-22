@@ -304,7 +304,7 @@ namespace Video2Gba
             var b2 = Convert.ToUInt32(b);
             Console.WriteLine("Decoding video");
             // get wav
-            //./ffmpeg -i videoFile .\alie.wav
+            //./ffmpeg -i {videoFile} .\alie.wav
 
             //if not testing an doing a real run, comment from here to the line that says START HERE
             //if (!Directory.Exists(Processing))
@@ -333,10 +333,10 @@ namespace Video2Gba
             //    }
             //}
 
-            uint fr = (ShellFile.FromFilePath(videoFile).Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("videoFile").Properties.System.Video.FrameRate.Value.Value) / 1000;
+            uint fr = (ShellFile.FromFilePath(videoFile).Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath(videoFile).Properties.System.Video.FrameRate.Value.Value) / 1000;
             int targetFps = 15;
 
-            //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i videoFile -filter:v fps=fps={targetFps} {Processing}\\videoFile" };
+            //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {videoFile} -filter:v fps=fps={targetFps} {Processing}\\{videoFile}" };
 
             //var P = Process.Start(PSI);
 
@@ -350,18 +350,18 @@ namespace Video2Gba
                 if (fps < 0.5f) fps = 0.5f;
 
             }
-            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\videoFile -af atempo={fps} {Processing}\\alie.wav" };
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\{videoFile} -af atempo={fps} {Processing}\\alie.wav" };
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
-            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\videoFile -s 240x160 {Processing}/tmp%03d.png" };
+            //PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\{videoFile} -s 240x160 {Processing}/tmp%03d.png" };
             //P = Process.Start(PSI);
             //P.WaitForExit();
 
             //////FInal file
             ////// ffmpeg - i input.mp4 output.mp4
 
-            //////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\videoFile {Processing}\\alie.mpg" };
+            //////PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i {Processing}\\{videoFile} {Processing}\\alie.mpg" };
             //////P = Process.Start(PSI);
             //////P.WaitForExit();
 
@@ -451,7 +451,7 @@ namespace Video2Gba
             //   vi.Compress2();
 
             vi.GenerateBinary();
-            RenderAudio($"{Processing}\\{(new FileInfo(videoFile)).Name}.wav");
+            RenderAudio($"{Processing}\\{(new FileInfo({videoFile})).Name}.wav");
             GC.Collect();
             return;
            
