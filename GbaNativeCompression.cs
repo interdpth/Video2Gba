@@ -5,41 +5,6 @@ namespace Video2Gba
 {
     public class GbaNativeCompression : IDisposable
     {
-        [DllImport(@"ntrcomp.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        private static extern UInt32 To1D(IntPtr srcp, UInt32 size);
-
-        [DllImport(@"ntrcomp.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        private static extern UInt32 RLCompWrite16(IntPtr srcp, UInt32 size, IntPtr dstp);
-        [DllImport(@"ntrcomp.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        private static extern UInt32 RLCompWrite(IntPtr srcp, UInt32 size, IntPtr dstp);
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 LZCompWrite(IntPtr srcp, UInt32 size, IntPtr dstp, byte lzSearchOffset);
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 HuffCompWrite(IntPtr srcp, UInt32 size, IntPtr dstp, byte huffBitSize);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 Differ8(IntPtr srcp, IntPtr newframe, UInt32 size, IntPtr dstp);
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 Differ16(IntPtr srcp, IntPtr newframe, UInt32 size, IntPtr dstp);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 RLCompRead(IntPtr srcp, UInt32 size, IntPtr dstp);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 RLCompRead16(IntPtr srcp, UInt32 size, IntPtr dstp);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 LZCompRead(IntPtr srcp, UInt32 size, IntPtr dstp);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 OneDCompRead(IntPtr srcp, UInt32 size);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 RLCustomCompress16(IntPtr srcp, UInt32 size, IntPtr dstp);
-
-        [DllImport(@"ntrcomp.dll")]
-        private static extern UInt32 RLCustomDecompress16(IntPtr srcp, UInt32 size, IntPtr dstp);
-
 
         [DllImport("kernel32.dll", EntryPoint = "RtlFillMemory", SetLastError = false)]
         static extern void FillMemory(IntPtr destination, uint length, byte fill);
@@ -64,74 +29,59 @@ namespace Video2Gba
             if (newFramea != null) Marshal.Copy(newFramea, 0, newFramep, srcLength);
         }
 
-        public byte[] Lz77Compress()
-        {
-            compressedSize = LZCompWrite(srcp, (uint)srcLength, decompBuffer, 0);
-            return SetData();
-        }
-
-        public byte[] Lz77Deompress()
-        {
-            compressedSize = LZCompRead(srcp, (uint)srcLength, decompBuffer);
-            return SetData();
-        }
-
-        public byte[] RleCompress()
-        {
-            compressedSize = RLCompWrite(srcp, (uint)srcLength, decompBuffer);
-            return SetData();
-        }
-
         public byte[] Rle16Compress()
         {
-            //  compressedSize = RLCompWrite16(srcp, (uint)srcLength, decompBuffer);
-            return CustomCompresssRLE16();
-            // return SetData();
-            // return SetData();
-        }
-
-        public byte[] RleDecompress()
-        {
-            compressedSize = 0;//RLCompRead(srcp + 4, (uint)srcLength - 4, decompBuffer);
+            var dat = new RLE16(srcp, srcLength, true);
+            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
+            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int)compressedSize);
             return SetData();
         }
 
         public byte[] Rle16Decompress()
         {
-            return CustomDecompresssRLE16();
-        }
-
-        public byte[] Differ8Compress()
-        {
-            compressedSize = Differ8(srcp, newFramep, (uint)srcLength, decompBuffer);
+            var dat = new RLE16(srcp, srcLength, false);
+            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
+            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int)compressedSize);
             return SetData();
         }
 
-        public byte[] Differ16Compress()
-        {
-            compressedSize = Differ16(srcp, newFramep, (uint)srcLength, decompBuffer);
-            return SetData();
-        }
 
-        public byte[] HuffCompress()
+        public byte[] To1D()
         {
-            compressedSize = HuffCompWrite(srcp, (uint)srcLength, decompBuffer, 8);
-            return SetData();
-        }
-        public byte[] Set1D()
-        {
-            To1D(srcp, (uint)srcLength);
+            int dstCounter = 0;
+            for(int i = 0;i<srcLength/2;)
+            {
+                byte firstByte = Marshal.ReadByte(srcp + i);
+                byte secondByte = Marshal.ReadByte(srcp + i + 1);
+
+                Marshal.WriteByte(decompBuffer + i , firstByte);
+                Marshal.WriteByte(decompBuffer + i + srcLength / 2, secondByte);
+
+                i += 2;
+
+            }
             compressedSize = (uint)srcLength;
-
-            return SetDataFromSelf();
+            return SetData();
         }
+
         public byte[] From1D()
         {
-            To1D(srcp, (uint)srcLength);
-            compressedSize = (uint)srcLength;
+            int dstCounter = 0;
+            for (int i = 0; i < srcLength / 2;)
+            {
+                byte firstByte = Marshal.ReadByte(srcp + i);
+                byte secondByte = Marshal.ReadByte(srcp + i + srcLength / 2);
 
-            return SetDataFromSelf();
+                Marshal.WriteByte(decompBuffer + i , firstByte);
+                Marshal.WriteByte(decompBuffer + i + 1 , secondByte);
+
+                i += 2;
+            }
+            compressedSize = (uint)srcLength;
+            return SetData();
         }
+
+
         public void Dispose()
         {
             if (srcp != IntPtr.Zero)
@@ -161,32 +111,6 @@ namespace Video2Gba
             byte[] newBuffer = new byte[compressedSize];
             Marshal.Copy(decompBuffer, newBuffer, 0, (int)compressedSize);
             return newBuffer;
-        }
-
-        public byte[] SetDataFromSelf()
-        {
-            if (compressedSize == 0) ThrowAss();
-            //Make a new return buffer
-
-            byte[] newBuffer = new byte[compressedSize];
-            Marshal.Copy(srcp, newBuffer, 0, (int)compressedSize);
-            return newBuffer;
-        }
-
-        public byte[] CustomCompresssRLE16()
-        {
-            var dat = new RLE16(srcp, srcLength, true);
-            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
-            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int)compressedSize);
-            return SetData();
-        }
-
-        public byte[] CustomDecompresssRLE16()
-        {
-            var dat = new RLE16(srcp, srcLength, false);
-            compressedSize = (uint)dat.GetData().Length; ;// RLCustomCompress16(srcp, (uint)srcLength, decompBuffer);
-            Marshal.Copy(dat.GetData(), 0, decompBuffer, (int)compressedSize);
-            return SetData();
         }
     }
 }

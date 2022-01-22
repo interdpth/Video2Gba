@@ -34,36 +34,6 @@ namespace Video2Gba
             {
                 using (var comp = new GbaNativeCompression(rawData))
                 {
-                    lzComp = comp.Lz77Compress();
-                }
-            }
-            catch (Exception e)
-            {
-                //Compression was bad. 
-                lzComp = null;
-                Console.WriteLine("Bad data");
-            }
-
-
-            //try
-            //{
-            //    using (var comp = new GbaNativeCompression(rawData))
-            //    {
-            //        rlComp = comp.RleCompress();
-            //    }
-            //}
-            //catch (Exception e)
-            //{
-            //    //Compression was bad. 
-            //    rlComp = null;
-            //    Console.WriteLine("Bad data");
-            //}
-
-
-            try
-            {
-                using (var comp = new GbaNativeCompression(rawData))
-                {
                     rlComp16 = comp.Rle16Compress();
                 }
             }
@@ -135,27 +105,14 @@ namespace Video2Gba
         private void Decompress()
         {
             var newData = Data;
-            if(LzComp)
-            {
-                using (var comp = new GbaNativeCompression(newData))
-                {
-                    newData = comp.Lz77Deompress();
-                }
-            }
 
             switch (header)
             {
                 case CompressionHeaders.LZCOMPRESSEDHEADER:
-                    using (var comp = new GbaNativeCompression(newData))
-                    {
-                        OGData = comp.Lz77Deompress();
-                    }
+
                     break;
                 case CompressionHeaders.RLEHEADER:
-                    using (var comp = new GbaNativeCompression(newData))
-                    {
-                        OGData = comp.RleDecompress();
-                    }
+
                     break;
                 case CompressionHeaders.RLEHEADER16:
                     using (var comp = new GbaNativeCompression(newData))

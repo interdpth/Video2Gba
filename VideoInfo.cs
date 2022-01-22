@@ -124,10 +124,10 @@ namespace Video2Gba
         }
 
         Dictionary<int, FrameBlock> loadedBlocks = new Dictionary<int, FrameBlock>();
-        CustomFrame lastFrame;
+      
         public void ClearBlocks(CustomFrame thisFrame)
         {
-            var loadedKeys = loadedBlocks.Keys;
+            var loadedKeys = loadedBlocks.Keys.ToList();
             foreach (int key in loadedKeys)
             {
                 if (!thisFrame.ContainerIDs.Contains(key))
@@ -137,55 +137,56 @@ namespace Video2Gba
             }
         }
 
-        //returns how many blocks are in use
-        private int CreateFromBlocks(List<FrameBlock> blocks, CustomFrame currentFrame, ref short[] image, int blockWidth, int blockHeight)
+        void LoadBlock(List<FrameBlock> blocks, CustomFrame currentFrame, int blockId)
         {
+            //Do we have more blocks loaded then needed 
+
+            if (loadedBlocks.Count > currentFrame.ContainerIDs.Count-1)
+            {
+                //Clear our blocks we don't need. 
+                ClearBlocks(currentFrame);
+            }
+            var possibleBlocks = blocks.Where(x => x.ID == blockId);
+
+            loadedBlocks[blockId] = possibleBlocks.First();
+            //Load up into an empty slot 
+
+        }
+
+        //returns how many blocks are in usev
+        private int CreateFromBlocks(List<FrameBlock> blocks, CustomFrame lastFrame, CustomFrame currentFrame, ref short[] image, int blockWidth, int blockHeight)
+        {
+            int blockId = -1;
             for (int i = 0; i < currentFrame.ContainerIDs.Count; i++)
             {
-                if (lastFrame == null || lastFrame.ContainerIDs[i] != lastFrame.ContainerIDs[i])
+                blockId = currentFrame.ContainerIDs[i];
+                if (lastFrame==null || lastFrame.ContainerIDs[i] != currentFrame.ContainerIDs[i])
                 {
-                    if (lastFrame == null)
-                    {
-                        lastFrame = currentFrame;//Only do it once.
-                    }
+                   
+                
 
                     //Get first block.
 
-                    int blockId = currentFrame.ContainerIDs[i];
+
                     int blockCount = loadedBlocks.Count(x => x.Value.ID == blockId);
                     if (blockCount == 0)
                     {
-                        //Do we have more blocks loaded then needed 
 
-                        if (loadedBlocks.Count > currentFrame.ContainerIDs.Count)
-                        {
-                            //Clear our blocks we don't need. 
-                            ClearBlocks(currentFrame);
-                        }
-                        var possibleBlocks = blocks.Where(x => x.ID == blockId);
-
-                        loadedBlocks[blockId] = possibleBlocks.First();
-                        //Load up into an empty slot 
-
-
-                        //Make sure that we are not already loaded.
+                        LoadBlock(blocks, currentFrame, blockId);
                     }
-
-                    //Calc base x and base y
-
-
-                    
-                                          //240x160
-                    int maxX = 240 / blockWidth;
-                    int maxY = 160 / blockHeight;
-              
-                    //y = i/MaxX
-                    //x = i%maxY
-                    //Now draw 
-                    int baseX = i % maxY;
-                    int baseY = i / maxX;
-                    SetPixelBlock(240, baseX, baseY, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
                 }
+
+                //240x160
+                int maxX = 240 / blockWidth;
+                int maxY = 160 / blockHeight;
+
+                //y = i/MaxX
+                //x = i%maxY
+                //Now draw 
+                int baseX = i % maxY;
+                int baseY = i / maxX;
+                SetPixelBlock(240, baseX, baseY, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
+
             }
             return loadedBlocks.Count;
         }
@@ -274,22 +275,22 @@ namespace Video2Gba
                 newFile.Write32((int)fb.Length);
                 using (var compress = new GbaNativeCompression(fb.Data))
                 {
-                    byte[] newDAta = compress.Lz77Compress();
+                    //byte[] newDAta = compress.Lz77Compress();
 
-                    if (newDAta.Length < compressBlocks.Data.Length)
-                    {
+                    //if (newDAta.Length < compressBlocks.Data.Length)
+                    //{
 
-                        newFile.Write8(0xFF);
-                        long start = newFile.Position;
-                        foreach (byte b in newDAta)
-                        {
-                            newFile.Write8(b);
-                        }
-                        long end = newFile.Position;
-                        realSize = end - start;
-                    }
-                    else
-                    {
+                    //    newFile.Write8(0xFF);
+                    //    long start = newFile.Position;
+                    //    foreach (byte b in newDAta)
+                    //    {
+                    //        newFile.Write8(b);
+                    //    }
+                    //    long end = newFile.Position;
+                    //    realSize = end - start;
+                    //}
+                    //else
+                    //{
                         //Lazy writing
                         newFile.Write8(0x00);
                         long start = newFile.Position;
@@ -297,7 +298,7 @@ namespace Video2Gba
                         long end = newFile.Position;
 
                         realSize = end - start;
-                    }
+                   // }
 
                 }
                 long curPos = newFile.Position;
@@ -307,7 +308,7 @@ namespace Video2Gba
             }
         }
 
-        public void Compress3()
+        public void GenerateBinary()
         {
             long oldSize = GetSize();
             List<long> fixedList = new List<long>();
@@ -424,7 +425,7 @@ namespace Video2Gba
         {
             long oldSize = GetSize();
             List<long> fixedList = new List<long>();
-            Container lastFrame = null;
+            CustomFrame lastFrame = null;
             Dictionary<long, CustomFrame> sceens = new Dictionary<long, CustomFrame>();
             List<FrameBlock> frameBlocks = new List<FrameBlock>();
 
@@ -577,7 +578,7 @@ namespace Video2Gba
             List<int> currentScreen = new List<int>();
             short[] ScreenGFX = new short[240 * 160];
             int lastoffset = 0;
-
+            Dictionary<int, Container> conainters = new Dictionary<int, Container>();
             for (int i = 0; i < offsetlist.Count; i++)
             {
                 //Let's form
@@ -588,7 +589,7 @@ namespace Video2Gba
                 long lookup = offsetlist[i];
 
                 CustomFrame newScreen = null;
-
+                bool runFirst = true;
                 if (lookup != lastoffset)
                 {
                     movieFIle.Position = lookup;
@@ -597,23 +598,46 @@ namespace Video2Gba
                     newScreen = sceens[key];//If this works we're good to go.
                                             //Begin the writing.
 
-                    CreateFromBlocks( blocks, newScreen,ref ScreenGFX, blockWidth, blockHeight);
-                    
+                    CreateFromBlocks(blocks, lastFrame , newScreen, ref ScreenGFX, blockWidth, blockHeight);
+                    runFirst = false;
                     Console.WriteLine("lol");
+                    lastFrame = newScreen;
                     //What's loaded 
 
                 }
 
 
                 Container c = new Container((long)i, data: ScreenGFX);
+                conainters[i] = c;
+                
+            }
 
-                //did it work D:
+            if (Files.Count != conainters.Count) throw new Exception("Failure matching container count");
 
 
+            Dictionary<int, Container> remap = new Dictionary<int, Container>();
+            foreach(var ma in Files)
+            {
+                remap[(int)ma.Value.ID] = ma.Value;
+            }
 
-
-
-
+            var b = remap.Keys;
+            foreach(int k in b)
+            {
+                //Update Checksums
+                var obj1 = remap[k];
+                var obj2 = conainters[k];
+                if (obj1.CheckSum!= obj2.CheckSum)
+                {
+                    for(int i =0; i<obj1.OGData.Length;i++)
+                    {
+                        if (obj1.OGData[i] != obj2.OGData[i])
+                        {
+                            throw new Exception("Checksums failed");
+                        }
+                    }
+                   
+                }
 
             }
 
@@ -626,7 +650,7 @@ namespace Video2Gba
         }
 
 
-        
+
 
         public int GetByteSizeForFrames(ref List<FrameBlock> frameBlocks, ref Dictionary<long, CustomFrame> frames)
         {

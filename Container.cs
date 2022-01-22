@@ -46,6 +46,7 @@ namespace Video2Gba
 
         public Container(long id, short[] data = null, int theIndex = -1)
         {
+            int Length = data.Length;
             byte[] newData = new byte[Length * 2];
             Buffer.BlockCopy(data, 0, newData, 0, (int)Length * 2);
             _ogdata = newData;
