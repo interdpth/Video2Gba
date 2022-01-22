@@ -428,21 +428,21 @@ namespace Video2Gba
             var vi = new VideoInfo();
 
 
-            for (int a = 0; a < imgbins.Count; a++)
-            {
-                string hey = imgbins[a];
+            //for (int a = 0; a < imgbins.Count; a++)
+            //{
+                string hey = imgbins[7];
 
                 try
                 {
                     byte[] bytes = File.ReadAllBytes(hey);
-                    vi.AddFile(hey, new Container(a, bytes));
+                    vi.AddFile(hey, new Container(7, bytes));
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e);
                 }
 
-            }
+         //   }
 
             //How many similar files.
 
@@ -451,7 +451,7 @@ namespace Video2Gba
             //   vi.Compress2();
 
             vi.GenerateBinary();
-            RenderAudio($"{Processing}\\{(new FileInfo({videoFile})).Name}.wav");
+            RenderAudio($"{Processing}\\{(new FileInfo(videoFile)).Name}.wav");
             GC.Collect();
             return;
            
