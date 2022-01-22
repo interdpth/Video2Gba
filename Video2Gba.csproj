@@ -113,12 +113,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActiveMemory.cs" />
-    <Compile Include="BufferHelper.cs" />
     <Compile Include="CompressionHeaders.cs" />
     <Compile Include="Container.cs" />
     <Compile Include="CustomFrame.cs" />
     <Compile Include="FrameBlock.cs" />
-    <Compile Include="FrameOps.cs" />
     <Compile Include="GbaNativeCompression.cs" />
     <Compile Include="IOStream.cs" />
     <Compile Include="Libips.Net\Creator.cs" />
@@ -130,7 +128,6 @@
     <Compile Include="Libips.Net\Utils\Reader.cs" />
     <Compile Include="Libips.Net\Utils\Writer.cs" />
     <Compile Include="Lz77.cs" />
-    <Compile Include="Old.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">

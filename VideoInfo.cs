@@ -338,9 +338,9 @@ namespace Video2Gba
             //Real output.
 
 
-            //1/10/2022 
+            //1/21/2022 
             //remaining work
-            //bottom of func is bad and copy paste code. just need to drop frame table then update data at beginning of stream
+            //reconstructing frame needs work
 
 
             //definition

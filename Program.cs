@@ -333,7 +333,7 @@ namespace Video2Gba
             //    }
             //}
 
-            uint fr = (ShellFile.FromFilePath("videoFile").Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("videoFile").Properties.System.Video.FrameRate.Value.Value) / 1000;
+            uint fr = (ShellFile.FromFilePath(videoFile).Properties.System.Video.FrameRate.Value == null ? 0 : ShellFile.FromFilePath("videoFile").Properties.System.Video.FrameRate.Value.Value) / 1000;
             int targetFps = 15;
 
             //var PSI = new ProcessStartInfo { FileName = "ffmpeg.exe", UseShellExecute = true, CreateNoWindow = true, Arguments = $"-i videoFile -filter:v fps=fps={targetFps} {Processing}\\videoFile" };
@@ -434,8 +434,6 @@ namespace Video2Gba
 
                 try
                 {
-
-
                     byte[] bytes = File.ReadAllBytes(hey);
                     vi.AddFile(hey, new Container(a, bytes));
                 }
