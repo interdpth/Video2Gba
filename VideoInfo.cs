@@ -166,9 +166,12 @@ namespace Video2Gba
                 //y = i/MaxX
                 //x = i%maxY
                 //Now draw 
-                int baseX = i % maxY;
-                int baseY = i / maxX;
-                SetPixelBlock(240, baseX, baseY, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
+
+                //y=mx+b
+                //x = m+b/y
+                int baseX = i / maxX;
+                int baseY = i % maxY;
+                SetPixelBlock(240, baseX* blockWidth, baseY* blockHeight, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
 
             }
             return loadedBlocks.Count;
