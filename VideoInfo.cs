@@ -169,7 +169,7 @@ namespace Video2Gba
 
                 //y=mx+b
                 //x = m+b/y
-                int baseX = i / maxX;
+                int baseX = i;
                 int baseY = i % maxY;
                 SetPixelBlock(240, baseX* blockWidth, baseY* blockHeight, blockWidth, blockHeight, ref image, loadedBlocks[blockId]);
 
